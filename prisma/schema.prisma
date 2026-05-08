@@ -1,0 +1,259 @@
+// Cascadia Pigeon Rescue — Operations Management
+// Phase 1 MVP schema (intentionally pragmatic, not over-normalized).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ========================================================================
+// BIRDS
+// ========================================================================
+model Bird {
+  id              String   @id @default(cuid())
+  name            String
+  species         String?  // pigeon, dove, etc.
+  breed           String?
+  age             String?  // free-text: hatchling / juvenile / adult / 3 mo / etc.
+  sex             String?  // M / F / Unknown
+  weightGrams     Float?
+  bandInfo        String?
+  intakeDate      DateTime @default(now())
+  foundLocation   String?
+  finderName      String?
+  finderContact   String?
+  status          String   @default("needs_intake") // see lib/constants
+  placementNeed   String?  // urgent_foster / quarantine / medical / etc.
+  medicalPriority String   @default("none")          // none / low / medium / high / critical
+  dietNotes       String?
+  behaviorNotes   String?
+  specialHandling String?
+  outcome         String?
+  // Medical
+  primaryDiagnosis String?
+  contagionRisk    String?  // none / low / medium / high
+  feedingStatus    String?  // self / hand / tube / crop
+  heatSupport      Boolean  @default(false)
+  medicalNotes     String?
+
+  // Relations
+  fosterId   String?
+  foster     Foster?    @relation(fields: [fosterId], references: [id])
+  placements Placement[]
+  medications Medication[]
+  requests   Request[]
+  dailyUpdates DailyUpdate[]
+  photos     Photo[]
+  calendarEvents CalendarEvent[]
+  vetVisits  VetVisit[]
+  caseNotes  CaseNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// FOSTERS
+// ========================================================================
+model Foster {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  address         String?
+  hasTransport    Boolean  @default(false)
+  capacity        Int      @default(0)
+  quarantineAble  Boolean  @default(false)
+  medicalSkill    String   @default("none") // none / basic / intermediate / advanced
+  tubeFeedingSkill Boolean @default(false)
+  woundCareSkill  Boolean  @default(false)
+  neonateSkill    Boolean  @default(false)
+  longTermAble    Boolean  @default(false)
+  preferredTypes  String?
+  availability    String?  // free-text or "available"/"limited"/"unavailable"
+  notes           String?
+
+  // Live state
+  whiteboardNote  String?  // persistent urgent standing concern
+  currentStress   Int      @default(1) // 1..10 (last logged); convenience copy
+
+  birds       Bird[]
+  placements  Placement[]
+  wellness    WellnessLog[]
+  requests    Request[]
+  dailyUpdates DailyUpdate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PLACEMENTS
+// ========================================================================
+model Placement {
+  id         String    @id @default(cuid())
+  birdId     String
+  bird       Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  fosterId   String
+  foster     Foster    @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  startDate  DateTime  @default(now())
+  endDate    DateTime?
+  reason     String?   // initial / transfer / quarantine / medical / etc.
+  transferReason String?
+  transportDetails String?
+  suppliesSent String?
+  notes      String?
+  status     String    @default("active") // active / ended
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// MEDICATIONS
+// ========================================================================
+model Medication {
+  id            String   @id @default(cuid())
+  birdId        String
+  bird          Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  name          String
+  dose          String?
+  concentration String?
+  route         String?  // PO / SC / IM / topical / nebulized
+  frequency     String?  // once daily, BID, TID, etc.
+  startDate     DateTime @default(now())
+  stopDate      DateTime?
+  reassessDate  DateTime?
+  amountDispensed Float?
+  daysSupplied   Int?
+  expectedRunOut DateTime?
+  refillPrepared Boolean  @default(false)
+  refillDelivered Boolean @default(false)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// FOSTER WELLNESS LOG
+// ========================================================================
+model WellnessLog {
+  id           String   @id @default(cuid())
+  fosterId     String
+  foster       Foster   @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  stressLevel  Int      // 1..10
+  capacityConfidence Int? // 1..10
+  needsRehome  Boolean  @default(false)
+  needsSupplies Boolean @default(false)
+  needsLeadership Boolean @default(false)
+  burnoutWarning Boolean @default(false)
+  notes        String?
+
+  createdAt DateTime @default(now())
+}
+
+// ========================================================================
+// REQUESTS (foster portal)
+// ========================================================================
+model Request {
+  id          String    @id @default(cuid())
+  fosterId    String
+  foster      Foster    @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  birdId      String?
+  bird        Bird?     @relation(fields: [birdId], references: [id])
+  type        String    // supply / medication / bandage / transport / vet / food / equipment / other
+  urgency     String    @default("normal") // low / normal / high / urgent
+  description String
+  status      String    @default("open") // open / in_progress / resolved / closed
+  assignedTo  String?
+  resolution  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// DAILY FOSTER UPDATES
+// ========================================================================
+model DailyUpdate {
+  id            String   @id @default(cuid())
+  birdId        String
+  bird          Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  fosterId      String
+  foster        Foster   @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  healthStatus  String?
+  eatingDrinking String?
+  poopQuality   String?
+  energyLevel   String?
+  medsAdministered String?
+  stressLevel   Int?
+  concerns      String?
+  whiteboardUpdate String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+}
+
+// ========================================================================
+// PHOTOS
+// ========================================================================
+model Photo {
+  id      String  @id @default(cuid())
+  birdId  String
+  bird    Bird    @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  url     String
+  caption String?
+  createdAt DateTime @default(now())
+}
+
+// ========================================================================
+// CASE NOTES
+// ========================================================================
+model CaseNote {
+  id      String   @id @default(cuid())
+  birdId  String
+  bird    Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  author  String?
+  body    String
+  createdAt DateTime @default(now())
+}
+
+// ========================================================================
+// CALENDAR
+// ========================================================================
+model CalendarEvent {
+  id        String    @id @default(cuid())
+  title     String
+  type      String    // vet / bandage / med_start / med_stop / med_reassess / refill / supply / transfer / adoption / followup
+  startsAt  DateTime
+  endsAt    DateTime?
+  birdId    String?
+  bird      Bird?     @relation(fields: [birdId], references: [id])
+  notes     String?
+  done      Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// VET VISITS
+// ========================================================================
+model VetVisit {
+  id        String   @id @default(cuid())
+  birdId    String
+  bird      Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  visitDate DateTime
+  vetName   String?
+  diagnosis String?
+  treatment String?
+  followup  String?
+  cost      Float?
+  notes     String?
+
+  createdAt DateTime @default(now())
+}

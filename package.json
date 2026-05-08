@@ -1,0 +1,33 @@
+{
+  "name": "cascadia-pigeon-rescue",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.mjs",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.3",
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/adapter-libsql": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.14.0",
+    "next": "16.2.6",
+    "prisma": "^7.8.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

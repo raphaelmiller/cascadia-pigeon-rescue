@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f5;
+  --fg: #111;
+  --muted: #6b7280;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --brand: #0f766e; /* teal-700 */
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* Slightly larger tap targets on mobile. */
+button, a, input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile-first: comfortable form inputs. */
+input, textarea, select {
+  font-size: 16px;
+}
