@@ -3,13 +3,16 @@ import { prisma } from '@/lib/prisma';
 import { computeRunout, daysUntil, fmtDate, fmtRelative } from '@/lib/utils';
 import { Card, H1, H2, Pill, StatusDot, Empty, Btn } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, URGENCY_TONE, stressLabel, stressTone } from '@/lib/constants';
-import { AlertTriangle, Activity, Bird as BirdIcon, Home, Pill as PillIcon, Inbox, Calendar as CalendarIcon } from 'lucide-react';
+import { AlertTriangle, Activity, Bird as BirdIcon, Home, Pill as PillIcon, Inbox, Calendar as CalendarIcon, Truck, Siren, Boxes } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
+  const now = new Date();
+  const in7d = new Date(now.getTime() + 7 * 86400000);
   const [
     birds, fosters, openRequests, meds, upcomingEvents,
+    transport, openShifts, lowStock, bandagesSoon,
   ] = await Promise.all([
     prisma.bird.findMany({ include: { foster: true } }),
     prisma.foster.findMany(),
@@ -20,13 +23,26 @@ export default async function Dashboard() {
     }),
     prisma.medication.findMany({
       include: { bird: true },
-      where: { OR: [{ stopDate: null }, { stopDate: { gt: new Date() } }] },
+      where: { OR: [{ stopDate: null }, { stopDate: { gt: now } }] },
     }),
     prisma.calendarEvent.findMany({
-      where: { startsAt: { gte: new Date() }, done: false },
+      where: { startsAt: { gte: now }, done: false },
       orderBy: { startsAt: 'asc' },
       take: 8,
       include: { bird: true },
+    }),
+    prisma.transportRequest.findMany({
+      where: { status: { in: ['open', 'assigned', 'in_transit'] } },
+      include: { volunteer: true },
+    }),
+    prisma.rescueShift.findMany({
+      where: { startsAt: { lte: in7d }, endsAt: { gte: now }, volunteerId: null },
+    }),
+    prisma.supply.findMany({ where: { threshold: { gt: 0 } } }),
+    prisma.bandageTask.findMany({
+      where: { active: true, nextDueAt: { lte: in7d } },
+      include: { bird: true },
+      orderBy: { nextDueAt: 'asc' },
     }),
   ]);
 
@@ -89,6 +105,38 @@ export default async function Dashboard() {
           label="Refills due ≤7d"
           value={refillSoon.length}
           href="/medications"
+        />
+      </div>
+
+      {/* Phase 2 KPIs */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          tone={transport.filter(t => !t.volunteerId).length ? 'orange' : 'green'}
+          icon={<Truck size={18} />}
+          label="Transport — active"
+          value={transport.length}
+          href="/transport"
+        />
+        <KpiCard
+          tone={openShifts.length ? 'orange' : 'green'}
+          icon={<Siren size={18} />}
+          label="Open rescue shifts (7d)"
+          value={openShifts.length}
+          href="/rescue"
+        />
+        <KpiCard
+          tone={bandagesSoon.length ? 'yellow' : 'green'}
+          icon={<Activity size={18} />}
+          label="Bandages due ≤7d"
+          value={bandagesSoon.length}
+          href="/bandages"
+        />
+        <KpiCard
+          tone={lowStock.filter(s => s.onHand <= s.threshold).length ? 'red' : 'green'}
+          icon={<Boxes size={18} />}
+          label="Supplies low"
+          value={lowStock.filter(s => s.onHand <= s.threshold).length}
+          href="/supplies"
         />
       </div>
 

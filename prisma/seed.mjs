@@ -16,10 +16,16 @@ async function reset() {
   await prisma.vetVisit.deleteMany();
   await prisma.photo.deleteMany();
   await prisma.calendarEvent.deleteMany();
+  await prisma.bandageTask.deleteMany();
   await prisma.medication.deleteMany();
   await prisma.placement.deleteMany();
   await prisma.bird.deleteMany();
   await prisma.foster.deleteMany();
+  await prisma.transportRequest.deleteMany();
+  await prisma.transportVolunteer.deleteMany();
+  await prisma.rescueShift.deleteMany();
+  await prisma.rescueVolunteer.deleteMany();
+  await prisma.supply.deleteMany();
 }
 
 async function main() {
@@ -339,8 +345,195 @@ async function main() {
   await prisma.caseNote.create({ data: { birdId: ada.id, author: 'Maya', body: 'Eating well, no signs of pain. Bandage clean.' } });
   await prisma.caseNote.create({ data: { birdId: rocky.id, body: 'Blood lead level 38 µg/dL on intake — moderate. Started chelation.' } });
 
+  // ====================================================================
+  // PHASE 2 SEED
+  // ====================================================================
+
+  // Transport volunteers
+  const driver1 = await prisma.transportVolunteer.create({
+    data: {
+      name: 'Wei H.',
+      phone: '206-555-0301',
+      location: 'Greenwood',
+      vehicleType: 'SUV',
+      maxDistanceMi: 40,
+      medicalCapable: true,
+      availability: 'weekends + Tue/Thu evenings',
+      notes: 'Has a kennel in the back. Comfortable with crop-fed birds.',
+    },
+  });
+  const driver2 = await prisma.transportVolunteer.create({
+    data: {
+      name: 'Bea S.',
+      phone: '206-555-0302',
+      location: 'Renton',
+      vehicleType: 'sedan',
+      maxDistanceMi: 25,
+      availability: 'weekday afternoons',
+    },
+  });
+  await prisma.transportVolunteer.create({
+    data: {
+      name: 'Marcus L.',
+      phone: '253-555-0303',
+      location: 'Tacoma',
+      vehicleType: 'pickup',
+      maxDistanceMi: 80,
+      medicalCapable: true,
+      availability: 'flexible',
+      notes: 'Long-haul OK. Will handle south-sound transports.',
+    },
+  });
+
+  // Transport requests
+  await prisma.transportRequest.create({
+    data: {
+      fromAddress: 'Priya V. (Bellevue)',
+      toAddress: 'Lee K. (Tacoma)',
+      pickupBy: day(2),
+      deliverBy: day(2),
+      description: 'Moss — transfer to long-term foster.',
+      urgency: 'urgent',
+      status: 'open',
+      birdId: moss.id,
+    },
+  });
+  await prisma.transportRequest.create({
+    data: {
+      fromAddress: 'CPR storage (Ballard)',
+      toAddress: 'Maya R. (Ballard)',
+      pickupBy: day(1),
+      description: '5 lb medical-grade pellets + heating pad.',
+      urgency: 'high',
+      status: 'assigned',
+      volunteerId: driver1.id,
+    },
+  });
+  await prisma.transportRequest.create({
+    data: {
+      fromAddress: 'Dr. Rivera vet clinic (Lynnwood)',
+      toAddress: 'Maya R. (Ballard)',
+      pickupBy: day(0.25),
+      description: 'Ada — post-op pickup.',
+      urgency: 'normal',
+      status: 'in_transit',
+      volunteerId: driver2.id,
+      birdId: ada.id,
+    },
+  });
+
+  // Rescue volunteers
+  const r1 = await prisma.rescueVolunteer.create({
+    data: {
+      name: 'Diego M.',
+      phone: '206-555-0401',
+      location: 'Capitol Hill',
+      skills: 'climbing, netting, first-aid',
+      emergencyResponse: true,
+      availability: 'weekends, evenings on-call',
+    },
+  });
+  const r2 = await prisma.rescueVolunteer.create({
+    data: {
+      name: 'Aiko N.',
+      phone: '206-555-0402',
+      location: 'Wallingford',
+      skills: 'driver, first-aid, comfortable on roofs',
+      availability: 'weekdays after 5pm',
+    },
+  });
+  await prisma.rescueVolunteer.create({
+    data: {
+      name: 'Owen T.',
+      phone: '425-555-0403',
+      location: 'Bellevue',
+      skills: 'driver, calm-handling',
+      availability: 'weekend mornings',
+    },
+  });
+
+  // Rescue shifts
+  await prisma.rescueShift.create({
+    data: {
+      startsAt: day(0.1), endsAt: day(0.4),
+      shiftType: 'on_call', area: 'Seattle north',
+      volunteerId: r1.id,
+    },
+  });
+  await prisma.rescueShift.create({
+    data: {
+      startsAt: day(0.5), endsAt: day(1),
+      shiftType: 'on_call', area: 'Seattle south',
+    }, // unassigned
+  });
+  await prisma.rescueShift.create({
+    data: {
+      startsAt: day(1), endsAt: day(1.5),
+      shiftType: 'active', area: 'Eastside',
+      volunteerId: r2.id,
+    },
+  });
+  await prisma.rescueShift.create({
+    data: {
+      startsAt: day(2), endsAt: day(2.5),
+      shiftType: 'emergency_backup', area: 'all',
+    }, // unassigned
+  });
+  await prisma.rescueShift.create({
+    data: {
+      startsAt: day(3), endsAt: day(3.4),
+      shiftType: 'on_call', area: 'Seattle north',
+      volunteerId: r1.id,
+    },
+  });
+
+  // Supplies
+  await prisma.supply.create({ data: { name: 'Medical-grade pellets', category: 'food', unit: 'lb', onHand: 1, threshold: 5, reorderUrl: 'https://example.com/pellets', notes: 'Roudybush daily maintenance.' } });
+  await prisma.supply.create({ data: { name: 'Kaytee exact hand-feeding formula', category: 'food', unit: 'lb', onHand: 8, threshold: 4 } });
+  await prisma.supply.create({ data: { name: 'Vet wrap', category: 'medical', unit: 'rolls', onHand: 0, threshold: 6 } });
+  await prisma.supply.create({ data: { name: 'Gauze pads (4x4)', category: 'medical', unit: 'box', onHand: 3, threshold: 2 } });
+  await prisma.supply.create({ data: { name: '60 mL crop syringes', category: 'medical', unit: 'each', onHand: 12, threshold: 6 } });
+  await prisma.supply.create({ data: { name: 'Heating pads', category: 'housing', unit: 'each', onHand: 2, threshold: 4 } });
+  await prisma.supply.create({ data: { name: 'Travel kennels (small)', category: 'housing', unit: 'each', onHand: 6, threshold: 3 } });
+  await prisma.supply.create({ data: { name: 'F10 disinfectant', category: 'cleaning', unit: 'mL', onHand: 250, threshold: 500 } });
+  await prisma.supply.create({ data: { name: 'Newspaper', category: 'cleaning', unit: 'stack', onHand: 4, threshold: 2 } });
+  await prisma.supply.create({ data: { name: 'Intake forms', category: 'paperwork', unit: 'each', onHand: 18, threshold: 10 } });
+
+  // Bandage tasks
+  await prisma.bandageTask.create({
+    data: {
+      birdId: ada.id,
+      description: 'Wing wrap change — figure-8 with vet wrap',
+      intervalDays: 2,
+      nextDueAt: day(1),
+      lastDoneAt: day(-1),
+      notes: 'Photograph wound. Watch for swelling at fixator pin sites.',
+    },
+  });
+  await prisma.bandageTask.create({
+    data: {
+      birdId: sage.id,
+      description: 'Puncture-wound dressing change',
+      intervalDays: 1,
+      nextDueAt: day(0.2),
+      notes: 'Clean with saline, apply silver sulfadiazine, gauze + vet wrap.',
+    },
+  });
+  await prisma.bandageTask.create({
+    data: {
+      birdId: moss.id,
+      description: 'Foot bandage check',
+      intervalDays: 3,
+      nextDueAt: day(2),
+      lastDoneAt: day(-1),
+    },
+  });
+
   console.log('✅ Seeded:', {
     fosters: 5, birds: 8, placements: 6, meds: 5, events: 6, requests: 3,
+    transportVolunteers: 3, transportRequests: 3,
+    rescueVolunteers: 3, rescueShifts: 5,
+    supplies: 10, bandageTasks: 3,
   });
   await prisma.$disconnect();
 }

@@ -50,6 +50,7 @@ model Bird {
   calendarEvents CalendarEvent[]
   vetVisits  VetVisit[]
   caseNotes  CaseNote[]
+  bandageTasks BandageTask[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -256,4 +257,114 @@ model VetVisit {
   notes     String?
 
   createdAt DateTime @default(now())
+}
+
+// ========================================================================
+// PHASE 2: TRANSPORT
+// ========================================================================
+model TransportVolunteer {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  location        String?
+  vehicleType     String?  // sedan / SUV / pickup / van / etc.
+  maxDistanceMi   Int?     // willingness in miles
+  medicalCapable  Boolean  @default(false)
+  availability    String?  // free-text or weekly pattern
+  notes           String?
+
+  requests        TransportRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TransportRequest {
+  id           String   @id @default(cuid())
+  birdId       String?
+  fromAddress  String
+  toAddress    String
+  pickupBy     DateTime
+  deliverBy    DateTime?
+  description  String?
+  urgency      String   @default("normal") // low / normal / high / urgent
+  status       String   @default("open")   // open / assigned / in_transit / delivered / cancelled
+  notes        String?
+
+  volunteerId  String?
+  volunteer    TransportVolunteer? @relation(fields: [volunteerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 2: RESCUE SHIFTS
+// ========================================================================
+model RescueVolunteer {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String?
+  email           String?
+  location        String?
+  skills          String?  // free text — climbing / netting / first-aid / driver / etc.
+  emergencyResponse Boolean @default(false)
+  availability    String?
+  notes           String?
+
+  shifts          RescueShift[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RescueShift {
+  id           String   @id @default(cuid())
+  startsAt     DateTime
+  endsAt       DateTime
+  shiftType    String   @default("on_call") // on_call / active / emergency_backup
+  area         String?
+  notes        String?
+
+  volunteerId  String?
+  volunteer    RescueVolunteer? @relation(fields: [volunteerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 2: SUPPLY INVENTORY
+// ========================================================================
+model Supply {
+  id           String   @id @default(cuid())
+  name         String
+  category     String?  // food / medical / housing / cleaning / paperwork
+  unit         String?  // lb / box / each / mL
+  onHand       Float    @default(0)
+  threshold    Float    @default(0)   // alert if onHand <= threshold
+  reorderUrl   String?
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 2: BANDAGE TASKS (recurring per bird)
+// ========================================================================
+model BandageTask {
+  id            String    @id @default(cuid())
+  birdId        String
+  bird          Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  description   String
+  intervalDays  Int       @default(2)
+  nextDueAt     DateTime
+  lastDoneAt    DateTime?
+  active        Boolean   @default(true)
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

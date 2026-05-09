@@ -159,3 +159,22 @@ export const TONE_BORDER: Record<string, string> = {
   purple: 'border-violet-300',
   gray: 'border-gray-200',
 };
+
+// Phase 2 enums
+export const TRANSPORT_STATUSES = ['open', 'assigned', 'in_transit', 'delivered', 'cancelled'] as const;
+export const TRANSPORT_STATUS_TONE: Record<string, string> = {
+  open: 'orange',
+  assigned: 'yellow',
+  in_transit: 'blue',
+  delivered: 'green',
+  cancelled: 'gray',
+};
+
+export const SHIFT_TYPES = ['on_call', 'active', 'emergency_backup'] as const;
+export const SHIFT_TYPE_TONE: Record<string, string> = {
+  on_call: 'blue',
+  active: 'green',
+  emergency_backup: 'orange',
+};
+
+export const SUPPLY_CATEGORIES = ['food', 'medical', 'housing', 'cleaning', 'paperwork', 'other'] as const;
