@@ -38,6 +38,24 @@ async function updateWhiteboard(fosterId: string, formData: FormData) {
   redirect(`/fosters/${fosterId}`);
 }
 
+async function archiveFoster(fosterId: string) {
+  'use server';
+  await prisma.foster.update({ where: { id: fosterId }, data: { archivedAt: new Date(), deletedAt: null } });
+  redirect(`/fosters/${fosterId}`);
+}
+
+async function softDeleteFoster(fosterId: string) {
+  'use server';
+  await prisma.foster.update({ where: { id: fosterId }, data: { deletedAt: new Date() } });
+  redirect('/archive');
+}
+
+async function restoreFoster(fosterId: string) {
+  'use server';
+  await prisma.foster.update({ where: { id: fosterId }, data: { archivedAt: null, deletedAt: null } });
+  redirect(`/fosters/${fosterId}`);
+}
+
 async function updateFoster(fosterId: string, formData: FormData) {
   'use server';
   await prisma.foster.update({
@@ -78,6 +96,11 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
   const wellnessAction = logWellness.bind(null, f.id);
   const whiteboardAction = updateWhiteboard.bind(null, f.id);
   const editAction = updateFoster.bind(null, f.id);
+  const archiveAction = archiveFoster.bind(null, f.id);
+  const deleteAction = softDeleteFoster.bind(null, f.id);
+  const restoreAction = restoreFoster.bind(null, f.id);
+  const isArchived = !!f.archivedAt;
+  const isDeleted = !!f.deletedAt;
 
   return (
     <div className="space-y-4">
@@ -85,7 +108,11 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
       <div className="flex items-start gap-3 flex-wrap">
         <StatusDot tone={tone} size="lg" />
         <div className="flex-1 min-w-0">
-          <H1>{f.name}</H1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <H1>{f.name}</H1>
+            {isDeleted && <Pill tone="red">deleted</Pill>}
+            {isArchived && !isDeleted && <Pill tone="gray">archived</Pill>}
+          </div>
           <p className="text-sm text-gray-600 mt-1">
             {stressLabel(f.currentStress)} · {f.currentStress}/10 · {f.birds.length}/{f.capacity || '—'} birds
           </p>
@@ -95,6 +122,22 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
               {f.phone && f.email && <span> · </span>}
               {f.email && <span>{f.email}</span>}
             </p>
+          )}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {(isArchived || isDeleted) ? (
+            <form action={restoreAction}>
+              <Btn type="submit" variant="primary">↺ Restore</Btn>
+            </form>
+          ) : (
+            <>
+              <form action={archiveAction}>
+                <Btn type="submit" variant="ghost">Archive</Btn>
+              </form>
+              <form action={deleteAction}>
+                <Btn type="submit" variant="danger">Delete</Btn>
+              </form>
+            </>
           )}
         </div>
       </div>

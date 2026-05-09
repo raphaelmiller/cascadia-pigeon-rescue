@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { H1, H2, Card, Btn, Empty, Field, inputClass, Pill } from '@/components/ui';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { stressTone } from '@/lib/constants';
+import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,12 +50,13 @@ async function createUpdate(formData: FormData) {
 export default async function UpdatesPage() {
   const [updates, birds, fosters] = await Promise.all([
     prisma.dailyUpdate.findMany({
+      where: { bird: activeBirdWhere, foster: activeFosterWhere },
       include: { bird: true, foster: true },
       orderBy: { createdAt: 'desc' },
       take: 30,
     }),
-    prisma.bird.findMany({ orderBy: { name: 'asc' } }),
-    prisma.foster.findMany({ orderBy: { name: 'asc' } }),
+    prisma.bird.findMany({ where: activeBirdWhere, orderBy: { name: 'asc' } }),
+    prisma.foster.findMany({ where: activeFosterWhere, orderBy: { name: 'asc' } }),
   ]);
 
   return (

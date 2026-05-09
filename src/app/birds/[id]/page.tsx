@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES, MEDICAL_PRIORITIES } from '@/lib/constants';
 import { fmtDate, fmtDateTime, fmtRelative } from '@/lib/utils';
+import { activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,24 @@ async function addCaseNote(id: string, formData: FormData) {
   redirect(`/birds/${id}`);
 }
 
+async function archiveBird(id: string) {
+  'use server';
+  await prisma.bird.update({ where: { id }, data: { archivedAt: new Date(), deletedAt: null } });
+  redirect(`/birds/${id}`);
+}
+
+async function softDeleteBird(id: string) {
+  'use server';
+  await prisma.bird.update({ where: { id }, data: { deletedAt: new Date() } });
+  redirect('/archive');
+}
+
+async function restoreBird(id: string) {
+  'use server';
+  await prisma.bird.update({ where: { id }, data: { archivedAt: null, deletedAt: null } });
+  redirect(`/birds/${id}`);
+}
+
 async function addMedication(id: string, formData: FormData) {
   'use server';
   const name = String(formData.get('name') || '').trim();
@@ -80,10 +99,16 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
   });
   if (!bird) notFound();
 
-  const fosters = await prisma.foster.findMany({ orderBy: { name: 'asc' } });
+  const isArchived = !!bird.archivedAt;
+  const isDeleted = !!bird.deletedAt;
+
+  const fosters = await prisma.foster.findMany({ where: activeFosterWhere, orderBy: { name: 'asc' } });
   const updateAction = updateBird.bind(null, bird.id);
   const noteAction = addCaseNote.bind(null, bird.id);
   const medAction = addMedication.bind(null, bird.id);
+  const archiveAction = archiveBird.bind(null, bird.id);
+  const deleteAction = softDeleteBird.bind(null, bird.id);
+  const restoreAction = restoreBird.bind(null, bird.id);
 
   return (
     <div className="space-y-4">
@@ -95,6 +120,8 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
             <H1>{bird.name}</H1>
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {isDeleted && <Pill tone="red">deleted</Pill>}
+            {isArchived && !isDeleted && <Pill tone="gray">archived</Pill>}
             <Pill tone={STATUS_TONE[bird.status] || 'gray'}>{STATUS_LABELS[bird.status]}</Pill>
             {bird.medicalPriority !== 'none' && <Pill tone={PRIORITY_TONE[bird.medicalPriority]}>{bird.medicalPriority}</Pill>}
             {bird.species && <Pill>{bird.species}</Pill>}
@@ -102,7 +129,25 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
           </div>
           <p className="text-xs text-gray-500 mt-2">
             Intake {fmtDate(bird.intakeDate)} · last updated {fmtRelative(bird.updatedAt)}
+            {bird.archivedAt && ` · archived ${fmtRelative(bird.archivedAt)}`}
+            {bird.deletedAt && ` · deleted ${fmtRelative(bird.deletedAt)}`}
           </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {(isArchived || isDeleted) ? (
+            <form action={restoreAction}>
+              <Btn type="submit" variant="primary">↺ Restore</Btn>
+            </form>
+          ) : (
+            <>
+              <form action={archiveAction}>
+                <Btn type="submit" variant="ghost">Archive</Btn>
+              </form>
+              <form action={deleteAction}>
+                <Btn type="submit" variant="danger">Delete</Btn>
+              </form>
+            </>
+          )}
         </div>
       </div>
 

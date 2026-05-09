@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bird, Home, Pill, Inbox, NotebookPen, Calendar,
-  Truck, Siren, Bandage, Boxes, BellRing,
+  Truck, Siren, Bandage, Boxes, BellRing, Archive,
 } from 'lucide-react';
 
 const PRIMARY_NAV = [
@@ -22,14 +22,15 @@ const SECONDARY_NAV = [
   { href: '/rescue', label: 'Rescue', icon: Siren },
   { href: '/bandages', label: 'Bandages', icon: Bandage },
   { href: '/supplies', label: 'Supplies', icon: Boxes },
+  { href: '/archive', label: 'Archive', icon: Archive },
 ];
 
 const MOBILE_NAV = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/birds', label: 'Birds', icon: Bird },
   { href: '/fosters', label: 'Fosters', icon: Home },
+  { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/digest', label: 'Digest', icon: BellRing },
-  { href: '/medications', label: 'Meds', icon: Pill },
   { href: '/more', label: 'More', icon: Boxes },
 ];
 

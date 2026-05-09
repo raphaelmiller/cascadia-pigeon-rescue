@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, Empty, StatusDot, Btn } from '@/components/ui';
 import { fmtDate, fmtDateTime, daysUntil, computeRunout } from '@/lib/utils';
 import { stressTone, URGENCY_TONE, STATUS_LABELS } from '@/lib/constants';
+import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,13 +27,16 @@ export default async function DigestPage() {
       orderBy: { startsAt: 'asc' },
     }),
     prisma.bandageTask.findMany({
-      where: { active: true, nextDueAt: { lte: in48h } },
+      where: { active: true, nextDueAt: { lte: in48h }, bird: activeBirdWhere },
       include: { bird: true },
       orderBy: { nextDueAt: 'asc' },
     }),
     prisma.medication.findMany({
       include: { bird: true },
-      where: { OR: [{ stopDate: null }, { stopDate: { gt: now } }] },
+      where: {
+        OR: [{ stopDate: null }, { stopDate: { gt: now } }],
+        bird: activeBirdWhere,
+      },
     }),
     prisma.transportRequest.findMany({
       where: { status: { in: ['open', 'assigned', 'in_transit'] } },
@@ -43,7 +47,7 @@ export default async function DigestPage() {
       where: { startsAt: { lte: in7d }, endsAt: { gte: now }, volunteerId: null },
       orderBy: { startsAt: 'asc' },
     }),
-    prisma.foster.findMany(),
+    prisma.foster.findMany({ where: activeFosterWhere }),
     prisma.supply.findMany({ where: { threshold: { gt: 0 } } }),
     prisma.request.findMany({
       where: { status: { in: ['open', 'in_progress'] }, urgency: { in: ['urgent', 'high'] } },

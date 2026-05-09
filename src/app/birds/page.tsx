@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES } from '@/lib/constants';
 import { fmtDate } from '@/lib/utils';
+import { activeBirdWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export default async function BirdsPage({
   searchParams: Promise<{ filter?: string; status?: string; q?: string }>;
 }) {
   const params = await searchParams;
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { ...activeBirdWhere };
   if (params.status && BIRD_STATUSES.includes(params.status as never)) where.status = params.status;
   if (params.filter === 'critical') where.medicalPriority = { in: ['high', 'critical'] };
   if (params.filter === 'needs') where.status = { in: ['needs_intake', 'needs_foster', 'needs_transfer'] };

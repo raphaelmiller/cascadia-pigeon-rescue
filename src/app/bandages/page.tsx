@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass, StatusDot } from '@/components/ui';
 import { fmtDateTime, daysUntil } from '@/lib/utils';
+import { activeBirdWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,11 +50,11 @@ async function deactivate(id: string) {
 export default async function BandagesPage() {
   const [tasks, birds] = await Promise.all([
     prisma.bandageTask.findMany({
-      where: { active: true },
+      where: { active: true, bird: activeBirdWhere },
       include: { bird: true },
       orderBy: { nextDueAt: 'asc' },
     }),
-    prisma.bird.findMany({ orderBy: { name: 'asc' } }),
+    prisma.bird.findMany({ where: activeBirdWhere, orderBy: { name: 'asc' } }),
   ]);
 
   const overdue = tasks.filter(t => (daysUntil(t.nextDueAt) ?? 99) < 0);

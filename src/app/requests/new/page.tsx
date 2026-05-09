@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
 import { REQUEST_TYPES, REQUEST_URGENCIES } from '@/lib/constants';
+import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +23,8 @@ async function createRequest(formData: FormData) {
 }
 
 export default async function NewRequestPage() {
-  const fosters = await prisma.foster.findMany({ orderBy: { name: 'asc' } });
-  const birds = await prisma.bird.findMany({ orderBy: { name: 'asc' } });
+  const fosters = await prisma.foster.findMany({ where: activeFosterWhere, orderBy: { name: 'asc' } });
+  const birds = await prisma.bird.findMany({ where: activeBirdWhere, orderBy: { name: 'asc' } });
   return (
     <div className="space-y-4">
       <H1>New request</H1>

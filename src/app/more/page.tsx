@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { H1, Card } from '@/components/ui';
 import {
   Truck, Siren, Bandage, Boxes, BellRing, Calendar, NotebookPen, Inbox, Pill,
-  Bird, Home, LayoutDashboard,
+  Bird, Home, LayoutDashboard, Archive,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +20,7 @@ const ALL_LINKS = [
   { href: '/rescue', label: 'Rescue shifts', icon: Siren, desc: 'On-call coverage + responders' },
   { href: '/bandages', label: 'Bandage tasks', icon: Bandage, desc: 'Recurring bandage changes' },
   { href: '/supplies', label: 'Supply inventory', icon: Boxes, desc: 'Stock + low-stock alerts' },
+  { href: '/archive', label: 'Archive & Trash', icon: Archive, desc: 'Restore archived or deleted records' },
 ];
 
 export default function MorePage() {

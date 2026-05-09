@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { computeRunout, daysUntil, fmtDate } from '@/lib/utils';
+import { activeBirdWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MedsPage() {
   const meds = await prisma.medication.findMany({
+    where: { bird: activeBirdWhere },
     include: { bird: true },
     orderBy: { startDate: 'desc' },
   });

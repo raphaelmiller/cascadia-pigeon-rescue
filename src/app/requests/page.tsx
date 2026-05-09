@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, Btn, Empty } from '@/components/ui';
 import { fmtRelative } from '@/lib/utils';
 import { URGENCY_TONE, REQUEST_STATUSES } from '@/lib/constants';
+import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export default async function RequestsPage({
   const { status } = await searchParams;
   const where: Record<string, unknown> = status ? { status } : { status: { in: ['open', 'in_progress'] } };
   const requests = await prisma.request.findMany({
-    where,
+    where: { ...where, foster: activeFosterWhere },
     include: { bird: true, foster: true },
     orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }],
   });

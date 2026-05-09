@@ -32,6 +32,9 @@ model Bird {
   behaviorNotes   String?
   specialHandling String?
   outcome         String?
+  // Soft-delete / archive
+  archivedAt      DateTime?
+  deletedAt       DateTime?
   // Medical
   primaryDiagnosis String?
   contagionRisk    String?  // none / low / medium / high
@@ -80,6 +83,10 @@ model Foster {
   // Live state
   whiteboardNote  String?  // persistent urgent standing concern
   currentStress   Int      @default(1) // 1..10 (last logged); convenience copy
+
+  // Soft-delete / archive
+  archivedAt      DateTime?
+  deletedAt       DateTime?
 
   birds       Bird[]
   placements  Placement[]

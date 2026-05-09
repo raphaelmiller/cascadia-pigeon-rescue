@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { stressLabel, stressTone } from '@/lib/constants';
+import { activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +13,10 @@ export default async function FostersPage({
 }) {
   const params = await searchParams;
   const fosters = await prisma.foster.findMany({
+    where: activeFosterWhere,
     include: {
-      _count: { select: { birds: true } },
-      birds: { take: 5 },
+      _count: { select: { birds: { where: { archivedAt: null, deletedAt: null } } } },
+      birds: { where: { archivedAt: null, deletedAt: null }, take: 5 },
     },
     orderBy: [{ currentStress: 'desc' }, { name: 'asc' }],
   });

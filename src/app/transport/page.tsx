@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass, StatusDot } from '@/components/ui';
 import { fmtDateTime, fmtRelative, daysUntil } from '@/lib/utils';
 import { URGENCY_TONE, REQUEST_URGENCIES, TRANSPORT_STATUS_TONE, TRANSPORT_STATUSES } from '@/lib/constants';
+import { activeBirdWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,7 @@ export default async function TransportPage() {
       orderBy: [{ urgency: 'desc' }, { pickupBy: 'asc' }],
     }),
     prisma.transportVolunteer.findMany({ orderBy: { name: 'asc' } }),
-    prisma.bird.findMany({ orderBy: { name: 'asc' } }),
+    prisma.bird.findMany({ where: activeBirdWhere, orderBy: { name: 'asc' } }),
   ]);
 
   const open = requests.filter(r => ['open', 'assigned', 'in_transit'].includes(r.status));

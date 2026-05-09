@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { computeRunout, daysUntil, fmtDate, fmtRelative } from '@/lib/utils';
 import { Card, H1, H2, Pill, StatusDot, Empty, Btn } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, URGENCY_TONE, stressLabel, stressTone } from '@/lib/constants';
+import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 import { AlertTriangle, Activity, Bird as BirdIcon, Home, Pill as PillIcon, Inbox, Calendar as CalendarIcon, Truck, Siren, Boxes } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,8 @@ export default async function Dashboard() {
     birds, fosters, openRequests, meds, upcomingEvents,
     transport, openShifts, lowStock, bandagesSoon,
   ] = await Promise.all([
-    prisma.bird.findMany({ include: { foster: true } }),
-    prisma.foster.findMany(),
+    prisma.bird.findMany({ where: activeBirdWhere, include: { foster: true } }),
+    prisma.foster.findMany({ where: activeFosterWhere }),
     prisma.request.findMany({
       where: { status: { in: ['open', 'in_progress'] } },
       include: { bird: true, foster: true },
@@ -23,7 +24,10 @@ export default async function Dashboard() {
     }),
     prisma.medication.findMany({
       include: { bird: true },
-      where: { OR: [{ stopDate: null }, { stopDate: { gt: now } }] },
+      where: {
+        OR: [{ stopDate: null }, { stopDate: { gt: now } }],
+        bird: activeBirdWhere,
+      },
     }),
     prisma.calendarEvent.findMany({
       where: { startsAt: { gte: now }, done: false },
