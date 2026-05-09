@@ -107,7 +107,20 @@ export const CALENDAR_TYPES = [
   'followup',
 ] as const;
 
-export const MEDICAL_SKILLS = ['none', 'basic', 'intermediate', 'advanced'] as const;
+// Foster rehab proficiency — was previously labeled "medical skill".
+// Underlying field is still `medicalSkill` in the schema (no migration
+// needed); we just changed the UI labels and options.
+export const REHAB_PROFICIENCY = ['beginner', 'intermediate', 'advanced'] as const;
+export const REHAB_PROFICIENCY_LABEL: Record<string, string> = {
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+  // legacy values still in DB — render gracefully
+  none: 'Beginner',
+  basic: 'Beginner',
+};
+// Legacy alias kept so old imports don't break during rollout.
+export const MEDICAL_SKILLS = REHAB_PROFICIENCY;
 
 // Foster stress → color tone (the brief asks for an exact 6-color ramp)
 export function stressTone(level: number | null | undefined): string {

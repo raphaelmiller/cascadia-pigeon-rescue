@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
-import { stressLabel, stressTone, MEDICAL_SKILLS } from '@/lib/constants';
+import { stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL } from '@/lib/constants';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +66,7 @@ async function updateFoster(fosterId: string, formData: FormData) {
       email: String(formData.get('email') || '') || null,
       address: String(formData.get('address') || '') || null,
       capacity: Number(formData.get('capacity') || 0),
-      medicalSkill: String(formData.get('medicalSkill') || 'none'),
+      medicalSkill: String(formData.get('medicalSkill') || 'beginner'),
       hasTransport: formData.get('hasTransport') === 'on',
       quarantineAble: formData.get('quarantineAble') === 'on',
       tubeFeedingSkill: formData.get('tubeFeedingSkill') === 'on',
@@ -254,9 +254,11 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
           <Field label="Email"><input name="email" defaultValue={f.email ?? ''} className={inputClass} /></Field>
           <Field label="Address"><input name="address" defaultValue={f.address ?? ''} className={inputClass} /></Field>
           <Field label="Capacity"><input type="number" name="capacity" defaultValue={f.capacity} className={inputClass} /></Field>
-          <Field label="Medical skill">
-            <select name="medicalSkill" defaultValue={f.medicalSkill} className={inputClass}>
-              {MEDICAL_SKILLS.map(s => (<option key={s} value={s}>{s}</option>))}
+          <Field label="Rehab proficiency">
+            <select name="medicalSkill" defaultValue={REHAB_PROFICIENCY.includes(f.medicalSkill as never) ? f.medicalSkill : 'beginner'} className={inputClass}>
+              {REHAB_PROFICIENCY.map(s => (
+                <option key={s} value={s}>{REHAB_PROFICIENCY_LABEL[s]}</option>
+              ))}
             </select>
           </Field>
           <Field label="Availability"><input name="availability" defaultValue={f.availability ?? ''} className={inputClass} /></Field>

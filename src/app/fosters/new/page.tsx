@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
-import { MEDICAL_SKILLS } from '@/lib/constants';
+import { REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,7 @@ async function createFoster(formData: FormData) {
       hasTransport: formData.get('hasTransport') === 'on',
       capacity: Number(formData.get('capacity') || 0),
       quarantineAble: formData.get('quarantineAble') === 'on',
-      medicalSkill: String(formData.get('medicalSkill') || 'none'),
+      medicalSkill: String(formData.get('medicalSkill') || 'beginner'),
       tubeFeedingSkill: formData.get('tubeFeedingSkill') === 'on',
       woundCareSkill: formData.get('woundCareSkill') === 'on',
       neonateSkill: formData.get('neonateSkill') === 'on',
@@ -58,9 +58,11 @@ export default function NewFosterPage() {
             <Field label="Capacity (max birds)">
               <input type="number" name="capacity" defaultValue={2} className={inputClass} />
             </Field>
-            <Field label="Medical skill">
-              <select name="medicalSkill" defaultValue="basic" className={inputClass}>
-                {MEDICAL_SKILLS.map(s => (<option key={s} value={s}>{s}</option>))}
+            <Field label="Rehab proficiency">
+              <select name="medicalSkill" defaultValue="beginner" className={inputClass}>
+                {REHAB_PROFICIENCY.map(s => (
+                  <option key={s} value={s}>{REHAB_PROFICIENCY_LABEL[s]}</option>
+                ))}
               </select>
             </Field>
             <Field label="Preferred bird types">

@@ -109,7 +109,7 @@ export default async function NewBirdPage() {
             </Field>
             <Field label="Contagion risk">
               <select name="contagionRisk" defaultValue="" className={inputClass}>
-                <option value="">unknown / none</option>
+                <option value="">unknown</option>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
