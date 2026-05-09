@@ -8,19 +8,29 @@ export const dynamic = 'force-dynamic';
 
 async function createVolunteer(formData: FormData) {
   'use server';
-  const name = String(formData.get('name') || '').trim();
-  if (!name) return;
+  const linkedFosterId = String(formData.get('linkedFosterId') || '') || null;
+  let baseData: Record<string, unknown> = {
+    name: String(formData.get('name') || '').trim(),
+    phone: String(formData.get('phone') || '') || null,
+    email: String(formData.get('email') || '') || null,
+    location: String(formData.get('location') || '') || null,
+  };
+  if (linkedFosterId) {
+    const f = await prisma.foster.findUnique({ where: { id: linkedFosterId } });
+    if (f) {
+      baseData = { name: f.name, phone: f.phone, email: f.email, location: f.address };
+    }
+  }
+  if (!baseData.name) return;
   await prisma.rescueVolunteer.create({
     data: {
-      name,
-      phone: String(formData.get('phone') || '') || null,
-      email: String(formData.get('email') || '') || null,
-      location: String(formData.get('location') || '') || null,
+      ...baseData,
+      linkedFosterId,
       skills: String(formData.get('skills') || '') || null,
       emergencyResponse: formData.get('emergencyResponse') === 'on',
       availability: String(formData.get('availability') || '') || null,
       notes: String(formData.get('notes') || '') || null,
-    },
+    } as Parameters<typeof prisma.rescueVolunteer.create>[0]['data'],
   });
   redirect('/rescue');
 }
@@ -58,8 +68,15 @@ export default async function RescuePage() {
       include: { volunteer: true },
       orderBy: { startsAt: 'asc' },
     }),
-    prisma.rescueVolunteer.findMany({ orderBy: { name: 'asc' } }),
+    prisma.rescueVolunteer.findMany({
+      include: { linkedFoster: true },
+      orderBy: { name: 'asc' },
+    }),
   ]);
+  const eligibleFosters = await prisma.foster.findMany({
+    where: { archivedAt: null, deletedAt: null, rescuerProfile: null },
+    orderBy: { name: 'asc' },
+  });
 
   const today = shifts.filter(s => s.startsAt < new Date(now.getTime() + 86400000));
   const open = shifts.filter(s => !s.volunteerId);
@@ -143,7 +160,10 @@ export default async function RescuePage() {
           <div className="grid gap-2 mt-3 sm:grid-cols-2">
             {volunteers.map(v => (
               <div key={v.id} className="rounded-lg border border-gray-200 p-3">
-                <div className="font-semibold">{v.name}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="font-semibold">{v.name}</div>
+                  {v.linkedFoster && <Pill tone="purple">also a foster</Pill>}
+                </div>
                 <div className="text-xs text-gray-500">
                   {v.location || 'location ?'}
                   {v.emergencyResponse && ' · 🚨 emergency response'}
@@ -158,7 +178,15 @@ export default async function RescuePage() {
         <details className="mt-3">
           <summary className="cursor-pointer text-sm text-teal-700">+ Add rescue volunteer</summary>
           <form action={createVolunteer} className="grid gap-3 sm:grid-cols-2 mt-3">
-            <Field label="Name *"><input required name="name" className={inputClass} /></Field>
+            <Field label="Or link to existing foster" className="sm:col-span-2" hint="If they're already a foster, pick them here — contact info auto-fills.">
+              <select name="linkedFosterId" defaultValue="" className={inputClass}>
+                <option value="">— new person —</option>
+                {eligibleFosters.map(f => (
+                  <option key={f.id} value={f.id}>{f.name} · foster</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Name (if not linking)"><input name="name" className={inputClass} /></Field>
             <Field label="Phone"><input name="phone" className={inputClass} /></Field>
             <Field label="Email"><input type="email" name="email" className={inputClass} /></Field>
             <Field label="Location"><input name="location" className={inputClass} /></Field>

@@ -119,14 +119,14 @@ export default async function Dashboard() {
           icon={<Truck size={18} />}
           label="Transport — active"
           value={transport.length}
-          href="/transport"
+          href="/transport/calendar"
         />
         <KpiCard
           tone={openShifts.length ? 'orange' : 'green'}
           icon={<Siren size={18} />}
           label="Open rescue shifts (7d)"
           value={openShifts.length}
-          href="/rescue"
+          href="/rescue/calendar"
         />
         <KpiCard
           tone={bandagesSoon.length ? 'yellow' : 'green'}

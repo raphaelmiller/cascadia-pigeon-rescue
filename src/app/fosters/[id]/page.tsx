@@ -88,6 +88,8 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
       birds: true,
       wellness: { orderBy: { createdAt: 'desc' }, take: 14 },
       requests: { orderBy: { createdAt: 'desc' }, take: 10, include: { bird: true } },
+      driverProfile: true,
+      rescuerProfile: true,
     },
   });
   if (!f) notFound();
@@ -112,6 +114,9 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
             <H1>{f.name}</H1>
             {isDeleted && <Pill tone="red">deleted</Pill>}
             {isArchived && !isDeleted && <Pill tone="gray">archived</Pill>}
+            <Pill tone="purple">foster</Pill>
+            {f.driverProfile && <Pill tone="blue">also a driver</Pill>}
+            {f.rescuerProfile && <Pill tone="orange">also a rescuer</Pill>}
           </div>
           <p className="text-sm text-gray-600 mt-1">
             {stressLabel(f.currentStress)} · {f.currentStress}/10 · {f.birds.length}/{f.capacity || '—'} birds

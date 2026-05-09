@@ -17,9 +17,11 @@ const PRIMARY_NAV = [
 const SECONDARY_NAV = [
   { href: '/digest', label: 'Digest', icon: BellRing },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
+  { href: '/transport/calendar', label: 'Transport Cal', icon: Truck },
+  { href: '/rescue/calendar', label: 'Rescue Cal', icon: Siren },
   { href: '/updates', label: 'Updates', icon: NotebookPen },
-  { href: '/transport', label: 'Transport', icon: Truck },
-  { href: '/rescue', label: 'Rescue', icon: Siren },
+  { href: '/transport', label: 'Drivers', icon: Truck },
+  { href: '/rescue', label: 'Rescuers', icon: Siren },
   { href: '/bandages', label: 'Bandages', icon: Bandage },
   { href: '/supplies', label: 'Supplies', icon: Boxes },
   { href: '/archive', label: 'Archive', icon: Archive },

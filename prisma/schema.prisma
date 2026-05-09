@@ -94,6 +94,10 @@ model Foster {
   requests    Request[]
   dailyUpdates DailyUpdate[]
 
+  // Reverse cross-links — a foster can also drive and/or rescue.
+  driverProfile   TransportVolunteer? @relation("FosterAsDriver")
+  rescuerProfile  RescueVolunteer?    @relation("FosterAsRescuer")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -281,6 +285,12 @@ model TransportVolunteer {
   availability    String?  // free-text or weekly pattern
   notes           String?
 
+  // Cross-link to other directories so the same person isn't duplicated.
+  // A person who's both a foster and a driver shares one Foster record;
+  // their TransportVolunteer record references it via linkedFosterId.
+  linkedFosterId  String?  @unique
+  linkedFoster    Foster?  @relation("FosterAsDriver", fields: [linkedFosterId], references: [id])
+
   requests        TransportRequest[]
 
   createdAt DateTime @default(now())
@@ -319,6 +329,10 @@ model RescueVolunteer {
   emergencyResponse Boolean @default(false)
   availability    String?
   notes           String?
+
+  // Cross-link to Foster so a foster who also does rescue isn't duplicated.
+  linkedFosterId  String?  @unique
+  linkedFoster    Foster?  @relation("FosterAsRescuer", fields: [linkedFosterId], references: [id])
 
   shifts          RescueShift[]
 
