@@ -4,6 +4,7 @@ import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES } from '@/lib/constants';
 import { fmtDate } from '@/lib/utils';
 import { activeBirdWhere } from '@/lib/filters';
+import { SwipeRow } from '@/components/SwipeRow';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,10 @@ export default async function BirdsPage({
         <Btn href="/birds/new" variant="primary">+ New intake</Btn>
       </div>
 
+      <p className="text-xs text-gray-500 -mt-1">
+        💡 <strong>Tip:</strong> swipe a card left (or drag with mouse) to archive or delete.
+      </p>
+
       <Card>
         <form className="flex gap-2 flex-wrap">
           <input
@@ -68,39 +73,47 @@ export default async function BirdsPage({
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {birds.map(b => (
-            <Link key={b.id} href={`/birds/${b.id}`}>
-              <Card className="hover:shadow-md transition cursor-pointer h-full">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <StatusDot tone={STATUS_TONE[b.status] || 'gray'} />
-                      <h3 className="font-semibold truncate">{b.name}</h3>
+            <SwipeRow
+              key={b.id}
+              archiveUrl={`/api/birds/${b.id}/archive`}
+              deleteUrl={`/api/birds/${b.id}/delete`}
+              entityName={b.name}
+              className="rounded-2xl"
+            >
+              <Link href={`/birds/${b.id}`} className="block">
+                <Card className="hover:shadow-md transition cursor-pointer h-full">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <StatusDot tone={STATUS_TONE[b.status] || 'gray'} />
+                        <h3 className="font-semibold truncate">{b.name}</h3>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{b.species || 'pigeon'} · {b.age || 'age unknown'}</p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{b.species || 'pigeon'} · {b.age || 'age unknown'}</p>
+                    {b.medicalPriority !== 'none' && (
+                      <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
+                    )}
                   </div>
-                  {b.medicalPriority !== 'none' && (
-                    <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
-                  )}
-                </div>
-                <div className="mt-3 space-y-1 text-xs">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Status</span>
-                    <span className="font-medium text-gray-800">{STATUS_LABELS[b.status]}</span>
+                  <div className="mt-3 space-y-1 text-xs">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Status</span>
+                      <span className="font-medium text-gray-800">{STATUS_LABELS[b.status]}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Foster</span>
+                      <span className="font-medium text-gray-800 truncate">{b.foster?.name || '—'}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Intake</span>
+                      <span className="font-medium text-gray-800">{fmtDate(b.intakeDate)}</span>
+                    </div>
+                    {b.primaryDiagnosis && (
+                      <div className="text-gray-600 mt-1.5 line-clamp-2">{b.primaryDiagnosis}</div>
+                    )}
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Foster</span>
-                    <span className="font-medium text-gray-800 truncate">{b.foster?.name || '—'}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Intake</span>
-                    <span className="font-medium text-gray-800">{fmtDate(b.intakeDate)}</span>
-                  </div>
-                  {b.primaryDiagnosis && (
-                    <div className="text-gray-600 mt-1.5 line-clamp-2">{b.primaryDiagnosis}</div>
-                  )}
-                </div>
-              </Card>
-            </Link>
+                </Card>
+              </Link>
+            </SwipeRow>
           ))}
         </div>
       )}

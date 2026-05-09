@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { stressLabel, stressTone } from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
+import { SwipeRow } from '@/components/SwipeRow';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,10 @@ export default async function FostersPage({
         <Btn href="/fosters/new" variant="primary">+ New foster</Btn>
       </div>
 
+      <p className="text-xs text-gray-500 -mt-1">
+        💡 <strong>Tip:</strong> swipe a card left (or drag with mouse) to archive or delete.
+      </p>
+
       <Card>
         <form className="flex gap-2 flex-wrap">
           <input
@@ -69,33 +74,41 @@ export default async function FostersPage({
           {filtered.map(f => {
             const tone = stressTone(f.currentStress);
             return (
-              <Link key={f.id} href={`/fosters/${f.id}`}>
-                <Card tone={tone} className="hover:shadow-md transition cursor-pointer h-full">
-                  <div className="flex items-start gap-3">
-                    <StatusDot tone={tone} size="lg" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate">{f.name}</h3>
-                      <p className="text-xs text-gray-500">{stressLabel(f.currentStress)} · {f.currentStress}/10</p>
+              <SwipeRow
+                key={f.id}
+                archiveUrl={`/api/fosters/${f.id}/archive`}
+                deleteUrl={`/api/fosters/${f.id}/delete`}
+                entityName={f.name}
+                className="rounded-2xl"
+              >
+                <Link href={`/fosters/${f.id}`} className="block">
+                  <Card tone={tone} className="hover:shadow-md transition cursor-pointer h-full">
+                    <div className="flex items-start gap-3">
+                      <StatusDot tone={tone} size="lg" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold truncate">{f.name}</h3>
+                        <p className="text-xs text-gray-500">{stressLabel(f.currentStress)} · {f.currentStress}/10</p>
+                      </div>
+                      <Pill>{f._count.birds}/{f.capacity || '—'}</Pill>
                     </div>
-                    <Pill>{f._count.birds}/{f.capacity || '—'}</Pill>
-                  </div>
-                  {f.whiteboardNote && (
-                    <div className="mt-3 rounded-lg bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-sm text-yellow-900">
-                      📌 {f.whiteboardNote}
-                    </div>
-                  )}
-                  {f.address && <p className="text-xs text-gray-500 mt-2 truncate">📍 {f.address}</p>}
-                  {f.birds.length > 0 && (
-                    <div className="mt-3 flex gap-1.5 flex-wrap">
-                      {f.birds.map(b => (
-                        <span key={b.id} className="text-xs rounded-md bg-gray-100 px-2 py-0.5">
-                          🕊 {b.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </Link>
+                    {f.whiteboardNote && (
+                      <div className="mt-3 rounded-lg bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-sm text-yellow-900">
+                        📌 {f.whiteboardNote}
+                      </div>
+                    )}
+                    {f.address && <p className="text-xs text-gray-500 mt-2 truncate">📍 {f.address}</p>}
+                    {f.birds.length > 0 && (
+                      <div className="mt-3 flex gap-1.5 flex-wrap">
+                        {f.birds.map(b => (
+                          <span key={b.id} className="text-xs rounded-md bg-gray-100 px-2 py-0.5">
+                            🕊 {b.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                </Link>
+              </SwipeRow>
             );
           })}
         </div>
