@@ -1,14 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
-import { REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, REHAB_SKILLS, REHAB_SKILLS_TOTAL } from '@/lib/constants';
+import { REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, ALL_SKILL_KEYS } from '@/lib/constants';
+import { SkillAssessment } from '@/components/SkillAssessment';
 
 export const dynamic = 'force-dynamic';
 
 async function createFoster(formData: FormData) {
   'use server';
   const skillData: Record<string, boolean> = {};
-  for (const s of REHAB_SKILLS) skillData[s.key] = formData.get(s.key) === 'on';
+  for (const key of ALL_SKILL_KEYS) skillData[key] = formData.get(key) === 'on';
 
   const f = await prisma.foster.create({
     data: {
@@ -33,6 +34,7 @@ export default function NewFosterPage() {
     <div className="space-y-4">
       <H1>New foster</H1>
       <form action={createFoster} className="space-y-4">
+        {/* Contact */}
         <Card>
           <h3 className="font-semibold mb-3">Contact</h3>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -51,6 +53,7 @@ export default function NewFosterPage() {
           </div>
         </Card>
 
+        {/* Capacity & profile */}
         <Card>
           <h3 className="font-semibold mb-3">Capacity & profile</h3>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -72,29 +75,26 @@ export default function NewFosterPage() {
           </div>
         </Card>
 
+        {/* Transport — its own dedicated section */}
         <Card>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Rehab skills checklist</h3>
-            <span className="text-xs text-gray-500">Score x / {REHAB_SKILLS_TOTAL}</span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {REHAB_SKILLS.map(s => (
-              <label key={s.key} className="flex items-start gap-2 text-sm rounded-lg p-2 hover:bg-gray-50 cursor-pointer">
-                <input type="checkbox" name={s.key} className="h-4 w-4 mt-0.5 rounded border-gray-300" />
-                <span>{s.label}</span>
-              </label>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-semibold mb-3">Transport</h3>
+          <h3 className="font-semibold mb-2">Transport</h3>
+          <p className="text-xs text-gray-500 mb-3">Tracked separately from the clinical assessment.</p>
           <label className="flex items-center gap-2 text-sm rounded-lg p-2 hover:bg-gray-50 cursor-pointer">
             <input type="checkbox" name="canTransportSelf" className="h-4 w-4 rounded border-gray-300" />
             Can transport birds themselves
           </label>
         </Card>
 
+        {/* Skill & care assessment */}
+        <div>
+          <h2 className="text-lg font-semibold mb-2">Foster Skill & Care Assessment</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Tick what this foster can do confidently. Scores update live.
+          </p>
+          <SkillAssessment />
+        </div>
+
+        {/* Notes */}
         <Card>
           <Field label="Notes">
             <textarea name="notes" rows={3} className={inputClass} />

@@ -123,43 +123,164 @@ export const REHAB_PROFICIENCY_LABEL: Record<string, string> = {
 export const MEDICAL_SKILLS = REHAB_PROFICIENCY;
 
 // =====================================================================
-// FOSTER REHAB SKILL CHECKLIST
-// 17 skills — each maps to a Boolean field on Foster. Score = # checked / 17.
-// Order is the order Rafa wrote them (preserved on purpose so muscle memory works).
+// FOSTER SKILL & CARE ASSESSMENT (Rafa's tiered rubric, 2026-05-08)
+// Two independent scores: Clinical Competency + Quality of Care.
+// Each tier carries a point weight. Categories are derived from totals.
 // =====================================================================
-export const REHAB_SKILLS: { key: string; label: string }[] = [
-  { key: 'skillEnrichment',      label: 'Puts effort into enrichment' },
-  { key: 'skillOralMeds',        label: 'Can give oral meds' },
-  { key: 'skillSyringeFeed',     label: 'Can syringe feed' },
-  { key: 'skillTubeFeed',        label: 'Can tube feed' },
-  { key: 'skillQuarantine',      label: 'Solid understanding of quarantine procedures / hygiene' },
-  { key: 'skillWoundCare',       label: 'Proficient at wound care' },
-  { key: 'skillNeonates',        label: 'Neonates' },
-  { key: 'skillFootBandages',    label: 'Proficient at foot bandages' },
-  { key: 'skillBoots',           label: 'Proficient at boots' },
-  { key: 'skillWingWraps',       label: 'Proficient at wing wraps' },
-  { key: 'skillSubqFluids',      label: 'Can give subq fluids' },
-  { key: 'skillIMInjections',    label: 'Can give IM injections' },
-  { key: 'skillCompoundMeds',    label: 'Can compound meds' },
-  { key: 'skillCropSwabsFecals', label: 'Can do crop swabs and fecals' },
-  { key: 'skillCageTime',        label: 'Able to give birds sufficient time out of cage' },
-  { key: 'skillBirdLights',      label: 'Has bird lights' },
-  { key: 'skillSupplements',     label: 'Gives grit, vitamins, calcium, probiotics' },
+
+export type SkillItem = { key: string; label: string };
+export type SkillTier = {
+  id: string;
+  title: string;
+  pointsPer: number;
+  scoreCategory: 'clinical' | 'quality';
+  description?: string;
+  items: SkillItem[];
+};
+
+export const SKILL_TIERS: SkillTier[] = [
+  {
+    id: 'basic',
+    title: 'Basic Skills',
+    pointsPer: 2,
+    scoreCategory: 'clinical',
+    items: [
+      { key: 'skillOralMeds',    label: 'Can give oral medications' },
+      { key: 'skillSyringeFeed', label: 'Can syringe feed' },
+      { key: 'skillQuarantine',  label: 'Solid understanding of quarantine procedures / hygiene' },
+    ],
+  },
+  {
+    id: 'intermediate',
+    title: 'Intermediate Skills',
+    pointsPer: 3,
+    scoreCategory: 'clinical',
+    items: [
+      { key: 'skillTubeFeed',     label: 'Can tube feed' },
+      { key: 'skillCompoundMeds', label: 'Can compound medications safely and accurately' },
+    ],
+  },
+  {
+    id: 'advanced',
+    title: 'Advanced Skills',
+    pointsPer: 5,
+    scoreCategory: 'clinical',
+    items: [
+      { key: 'skillWoundCare',    label: 'Proficient at wound care' },
+      { key: 'skillFootBandages', label: 'Proficient at foot bandages' },
+      { key: 'skillBoots',        label: 'Proficient at boots' },
+      { key: 'skillWingWraps',    label: 'Proficient at wing wraps' },
+    ],
+  },
+  {
+    id: 'critical',
+    title: 'Critical Care Skills',
+    pointsPer: 8,
+    scoreCategory: 'clinical',
+    items: [
+      { key: 'skillCropSwabsFecals',  label: 'Can perform crop swabs and fecals' },
+      { key: 'skillIMInjections',     label: 'Can give IM injections' },
+      { key: 'skillSubqFluids',       label: 'Can administer subq fluids' },
+      { key: 'skillNeonates',         label: 'Experienced with neonates' },
+      { key: 'skillMedKnowledge',     label: 'Thorough understanding of common pigeon medications, treatment purposes, and safe administration' },
+      { key: 'skillEmaciationCare',   label: 'Strong understanding of severe emaciation / starvation care, including refeeding safety, gradual nutritional rehabilitation, hydration support, crop monitoring, and stabilization protocols' },
+    ],
+  },
+  {
+    id: 'quality',
+    title: 'Quality of Care',
+    pointsPer: 2,
+    scoreCategory: 'quality',
+    items: [
+      { key: 'skillBirdLights',  label: 'Has bird lights' },
+      { key: 'skillSupplements', label: 'Provides grit, calcium, vitamins, probiotics' },
+      { key: 'skillCageTime',    label: 'Able to provide sufficient time out of cage' },
+      { key: 'skillEnrichment',  label: 'Puts consistent effort into enrichment' },
+    ],
+  },
 ];
 
-export const REHAB_SKILLS_TOTAL = REHAB_SKILLS.length; // 17
+// All checkable skill keys (used by form action handlers to know which booleans to read).
+export const ALL_SKILL_KEYS: string[] = SKILL_TIERS.flatMap(t => t.items.map(i => i.key));
 
-export function rehabScore(foster: Record<string, unknown>): number {
-  let n = 0;
-  for (const s of REHAB_SKILLS) if (foster[s.key]) n++;
-  return n;
+// Maximum possible scores (used for progress bars).
+export const MAX_CLINICAL = SKILL_TIERS
+  .filter(t => t.scoreCategory === 'clinical')
+  .reduce((sum, t) => sum + t.items.length * t.pointsPer, 0); // 6 + 6 + 20 + 48 = 80
+export const MAX_QUALITY = SKILL_TIERS
+  .filter(t => t.scoreCategory === 'quality')
+  .reduce((sum, t) => sum + t.items.length * t.pointsPer, 0); // 8
+
+export function clinicalScore(foster: Record<string, unknown>): number {
+  let total = 0;
+  for (const tier of SKILL_TIERS) {
+    if (tier.scoreCategory !== 'clinical') continue;
+    for (const item of tier.items) {
+      if (foster[item.key]) total += tier.pointsPer;
+    }
+  }
+  return total;
 }
 
+export function qualityScore(foster: Record<string, unknown>): number {
+  let total = 0;
+  for (const tier of SKILL_TIERS) {
+    if (tier.scoreCategory !== 'quality') continue;
+    for (const item of tier.items) {
+      if (foster[item.key]) total += tier.pointsPer;
+    }
+  }
+  return total;
+}
+
+// ----- Categorization (Rafa's bands) -----
+export type ClinicalCategory =
+  | 'Basic Foster' | 'Medical Foster' | 'Advanced Rehab Foster' | 'Critical Care Foster';
+
+export function clinicalCategory(score: number): ClinicalCategory {
+  if (score >= 41) return 'Critical Care Foster';
+  if (score >= 25) return 'Advanced Rehab Foster';
+  if (score >= 11) return 'Medical Foster';
+  return 'Basic Foster';
+}
+
+export function clinicalCategoryTone(score: number): string {
+  if (score >= 41) return 'purple';
+  if (score >= 25) return 'green';
+  if (score >= 11) return 'blue';
+  return 'gray';
+}
+
+export type QualityCategory = 'Minimal' | 'Good' | 'Excellent';
+
+export function qualityCategory(score: number): QualityCategory {
+  // Bands: 0-2 Minimal | 4-6 Good | 8 Excellent
+  if (score >= 8) return 'Excellent';
+  if (score >= 4) return 'Good';
+  return 'Minimal';
+}
+
+export function qualityCategoryTone(score: number): string {
+  if (score >= 8) return 'purple';
+  if (score >= 4) return 'green';
+  if (score >= 2) return 'yellow';
+  return 'gray';
+}
+
+// ---------------------------------------------------------------------
+// Legacy compatibility shims so other pages that imported the old
+// `REHAB_SKILLS` / `rehabScore` continue to compile. They map to the
+// clinical+quality combined view.
+// ---------------------------------------------------------------------
+export const REHAB_SKILLS: SkillItem[] = SKILL_TIERS.flatMap(t => t.items);
+export const REHAB_SKILLS_TOTAL = REHAB_SKILLS.length;
+export function rehabScore(foster: Record<string, unknown>): number {
+  return clinicalScore(foster) + qualityScore(foster);
+}
 export function rehabScoreTone(score: number): string {
-  // 0–5 -> blue (room to grow), 6–11 -> yellow, 12–16 -> green, 17 -> purple
-  if (score === REHAB_SKILLS_TOTAL) return 'purple';
-  if (score >= 12) return 'green';
-  if (score >= 6) return 'yellow';
+  if (score >= 60) return 'purple';
+  if (score >= 30) return 'green';
+  if (score >= 10) return 'yellow';
   if (score >= 1) return 'blue';
   return 'gray';
 }

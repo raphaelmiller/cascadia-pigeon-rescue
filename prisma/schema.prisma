@@ -96,6 +96,9 @@ model Foster {
   skillCageTime         Boolean @default(false)
   skillBirdLights       Boolean @default(false)
   skillSupplements      Boolean @default(false)
+  // Critical-care additions (added with the tiered rubric)
+  skillMedKnowledge     Boolean @default(false)  // common pigeon meds + safe admin
+  skillEmaciationCare   Boolean @default(false)  // refeeding safety, rehab, crop mon
 
   // Live state
   whiteboardNote  String?  // persistent urgent standing concern

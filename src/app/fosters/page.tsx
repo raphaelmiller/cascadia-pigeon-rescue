@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
-import { stressLabel, stressTone, REHAB_SKILLS_TOTAL, rehabScore } from '@/lib/constants';
+import {
+  stressLabel, stressTone,
+  clinicalScore, qualityScore, clinicalCategory, qualityCategory,
+} from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
 import { SwipeRow } from '@/components/SwipeRow';
 
@@ -91,14 +94,26 @@ export default async function FostersPage({
                       </div>
                       <Pill>{f._count.birds}/{f.capacity || '—'}</Pill>
                     </div>
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                        <span>Rehab skills</span>
-                        <span className="tabular-nums font-semibold text-gray-700">{rehabScore(f as unknown as Record<string, unknown>)} / {REHAB_SKILLS_TOTAL}</span>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-gray-500">Clinical</span>
+                        <span className="tabular-nums font-semibold text-gray-700">
+                          {clinicalScore(f as unknown as Record<string, unknown>)}
+                          <span className="text-gray-400 font-normal ml-1">{clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}</span>
+                        </span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                        <div className="h-full bg-emerald-500" style={{ width: `${(rehabScore(f as unknown as Record<string, unknown>) / REHAB_SKILLS_TOTAL) * 100}%` }} />
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-gray-500">Quality</span>
+                        <span className="tabular-nums font-semibold text-gray-700">
+                          {qualityScore(f as unknown as Record<string, unknown>)}
+                          <span className="text-gray-400 font-normal ml-1">{qualityCategory(qualityScore(f as unknown as Record<string, unknown>))}</span>
+                        </span>
                       </div>
+                      {f.canTransportSelf && (
+                        <div className="text-[10px] inline-flex items-center gap-1 text-sky-700 mt-0.5">
+                          🚛 can transport birds
+                        </div>
+                      )}
                     </div>
                     {f.whiteboardNote && (
                       <div className="mt-3 rounded-lg bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-sm text-yellow-900">

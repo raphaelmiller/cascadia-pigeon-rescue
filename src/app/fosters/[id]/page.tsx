@@ -2,7 +2,13 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
-import { stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, REHAB_SKILLS, REHAB_SKILLS_TOTAL, rehabScore, rehabScoreTone } from '@/lib/constants';
+import {
+  stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL,
+  ALL_SKILL_KEYS, SKILL_TIERS, MAX_CLINICAL, MAX_QUALITY,
+  clinicalScore, qualityScore, clinicalCategory, clinicalCategoryTone,
+  qualityCategory, qualityCategoryTone,
+} from '@/lib/constants';
+import { SkillAssessment } from '@/components/SkillAssessment';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +65,7 @@ async function restoreFoster(fosterId: string) {
 async function updateFoster(fosterId: string, formData: FormData) {
   'use server';
   const skillData: Record<string, boolean> = {};
-  for (const s of REHAB_SKILLS) skillData[s.key] = formData.get(s.key) === 'on';
+  for (const key of ALL_SKILL_KEYS) skillData[key] = formData.get(key) === 'on';
   await prisma.foster.update({
     where: { id: fosterId },
     data: {
@@ -244,28 +250,45 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
         )}
       </Card>
 
-      {/* Rehab skills score (read-only display, set in edit form below) */}
-      <Card tone={rehabScoreTone(rehabScore(f as unknown as Record<string, unknown>))}>
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-          <H2>Rehab skills</H2>
-          <span className="text-2xl font-bold tabular-nums">
-            {rehabScore(f as unknown as Record<string, unknown>)}
-            <span className="text-sm text-gray-500 font-normal"> / {REHAB_SKILLS_TOTAL}</span>
-          </span>
-        </div>
-        <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-          <div
-            className="h-full bg-emerald-500"
-            style={{ width: `${(rehabScore(f as unknown as Record<string, unknown>) / REHAB_SKILLS_TOTAL) * 100}%` }}
+      {/* Read-only assessment summary, computed server-side from saved values */}
+      <Card>
+        <H2>Foster Skill & Care Assessment</H2>
+        <div className="grid gap-3 sm:grid-cols-2 mt-3">
+          <ScoreReadout
+            title="Clinical Competency"
+            score={clinicalScore(f as unknown as Record<string, unknown>)}
+            max={MAX_CLINICAL}
+            category={clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}
+            tone={clinicalCategoryTone(clinicalScore(f as unknown as Record<string, unknown>))}
+          />
+          <ScoreReadout
+            title="Quality of Care"
+            score={qualityScore(f as unknown as Record<string, unknown>)}
+            max={MAX_QUALITY}
+            category={qualityCategory(qualityScore(f as unknown as Record<string, unknown>))}
+            tone={qualityCategoryTone(qualityScore(f as unknown as Record<string, unknown>))}
           />
         </div>
-        <div className="mt-3 grid gap-1 sm:grid-cols-2 text-sm">
-          {REHAB_SKILLS.map(s => {
-            const checked = (f as unknown as Record<string, unknown>)[s.key];
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {SKILL_TIERS.map(tier => {
+            const earned = tier.items.reduce((acc, it) => acc + ((f as unknown as Record<string, unknown>)[it.key] ? tier.pointsPer : 0), 0);
+            const max = tier.items.length * tier.pointsPer;
             return (
-              <div key={s.key} className={`flex items-start gap-2 px-2 py-1 rounded ${checked ? 'text-emerald-800 bg-emerald-50' : 'text-gray-400'}`}>
-                <span>{checked ? '✓' : '·'}</span>
-                <span>{s.label}</span>
+              <div key={tier.id} className="rounded-lg border border-gray-200 p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold">{tier.title}</span>
+                  <span className="tabular-nums text-gray-600">{earned} / {max}</span>
+                </div>
+                <ul className="mt-2 text-xs space-y-0.5">
+                  {tier.items.map(it => {
+                    const checked = (f as unknown as Record<string, unknown>)[it.key];
+                    return (
+                      <li key={it.key} className={checked ? 'text-emerald-700' : 'text-gray-400'}>
+                        {checked ? '✓' : '·'} {it.label}
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             );
           })}
@@ -291,36 +314,24 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
           <Field label="Preferred types" className="sm:col-span-2">
             <input name="preferredTypes" defaultValue={f.preferredTypes ?? ''} className={inputClass} />
           </Field>
-
           <div className="sm:col-span-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-              Rehab skills ({rehabScore(f as unknown as Record<string, unknown>)} / {REHAB_SKILLS_TOTAL} checked)
-            </h4>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {REHAB_SKILLS.map(s => {
-                const checked = (f as unknown as Record<string, unknown>)[s.key];
-                return (
-                  <label key={s.key} className="flex items-start gap-2 text-sm rounded-lg p-2 hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name={s.key}
-                      defaultChecked={!!checked}
-                      className="h-4 w-4 mt-0.5 rounded border-gray-300"
-                    />
-                    <span>{s.label}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <CheckRow name="longTermAble" label="Available for long-term foster" defaultChecked={f.longTermAble} />
           </div>
 
-          <div className="sm:col-span-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Transport</h4>
+          {/* Transport — standalone section */}
+          <div className="sm:col-span-2 rounded-xl bg-sky-50 ring-1 ring-sky-200 p-3 mt-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-800 mb-1">Transport</h4>
+            <p className="text-xs text-sky-900/70 mb-2">Tracked separately from the clinical assessment.</p>
             <CheckRow name="canTransportSelf" label="Can transport birds themselves" defaultChecked={f.canTransportSelf} />
           </div>
 
-          <div className="sm:col-span-2">
-            <CheckRow name="longTermAble" label="Available for long-term foster" defaultChecked={f.longTermAble} />
+          {/* Tiered assessment with live scoring */}
+          <div className="sm:col-span-2 mt-2">
+            <h4 className="text-sm font-semibold mb-2">Foster Skill & Care Assessment</h4>
+            <p className="text-xs text-gray-500 mb-3">Toggle skills below — scores update live. Save to persist.</p>
+            <SkillAssessment
+              initial={Object.fromEntries(ALL_SKILL_KEYS.map(k => [k, !!(f as unknown as Record<string, unknown>)[k]]))}
+            />
           </div>
 
           <Field label="Notes" className="sm:col-span-2">
@@ -339,5 +350,41 @@ function CheckRow({ name, label, defaultChecked }: { name: string; label: string
       <input type="checkbox" name={name} defaultChecked={defaultChecked} className="h-4 w-4 rounded border-gray-300" />
       {label}
     </label>
+  );
+}
+
+function ScoreReadout({
+  title, score, max, category, tone,
+}: {
+  title: string; score: number; max: number; category: string; tone: string;
+}) {
+  const pct = max ? Math.min(100, (score / max) * 100) : 0;
+  const ring =
+    tone === 'purple' ? 'ring-violet-200 bg-violet-50 text-violet-900'
+    : tone === 'green' ? 'ring-emerald-200 bg-emerald-50 text-emerald-900'
+    : tone === 'blue' ? 'ring-sky-200 bg-sky-50 text-sky-900'
+    : tone === 'yellow' ? 'ring-yellow-200 bg-yellow-50 text-yellow-900'
+    : 'ring-gray-200 bg-gray-50 text-gray-700';
+  const bar =
+    tone === 'purple' ? 'bg-violet-500'
+    : tone === 'green' ? 'bg-emerald-500'
+    : tone === 'blue' ? 'bg-sky-500'
+    : tone === 'yellow' ? 'bg-yellow-500'
+    : 'bg-gray-400';
+  return (
+    <div className={`rounded-2xl border ring-1 ${ring} p-4`}>
+      <div className="flex items-end justify-between gap-2">
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wide opacity-70">{title}</h4>
+          <div className="mt-1 text-3xl font-bold tabular-nums">
+            {score}<span className="text-base font-normal opacity-50"> / {max}</span>
+          </div>
+        </div>
+        <Pill tone={tone}>{category}</Pill>
+      </div>
+      <div className="mt-3 h-2 rounded-full bg-white/60 overflow-hidden">
+        <div className={`h-full ${bar}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
   );
 }
