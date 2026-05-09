@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
-import { stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL } from '@/lib/constants';
+import { stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, REHAB_SKILLS, REHAB_SKILLS_TOTAL, rehabScore, rehabScoreTone } from '@/lib/constants';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -58,6 +58,8 @@ async function restoreFoster(fosterId: string) {
 
 async function updateFoster(fosterId: string, formData: FormData) {
   'use server';
+  const skillData: Record<string, boolean> = {};
+  for (const s of REHAB_SKILLS) skillData[s.key] = formData.get(s.key) === 'on';
   await prisma.foster.update({
     where: { id: fosterId },
     data: {
@@ -67,14 +69,11 @@ async function updateFoster(fosterId: string, formData: FormData) {
       address: String(formData.get('address') || '') || null,
       capacity: Number(formData.get('capacity') || 0),
       medicalSkill: String(formData.get('medicalSkill') || 'beginner'),
-      hasTransport: formData.get('hasTransport') === 'on',
-      quarantineAble: formData.get('quarantineAble') === 'on',
-      tubeFeedingSkill: formData.get('tubeFeedingSkill') === 'on',
-      woundCareSkill: formData.get('woundCareSkill') === 'on',
-      neonateSkill: formData.get('neonateSkill') === 'on',
+      preferredTypes: String(formData.get('preferredTypes') || '') || null,
       longTermAble: formData.get('longTermAble') === 'on',
-      availability: String(formData.get('availability') || '') || null,
+      canTransportSelf: formData.get('canTransportSelf') === 'on',
       notes: String(formData.get('notes') || '') || null,
+      ...skillData,
     },
   });
   redirect(`/fosters/${fosterId}`);
@@ -245,6 +244,34 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
         )}
       </Card>
 
+      {/* Rehab skills score (read-only display, set in edit form below) */}
+      <Card tone={rehabScoreTone(rehabScore(f as unknown as Record<string, unknown>))}>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <H2>Rehab skills</H2>
+          <span className="text-2xl font-bold tabular-nums">
+            {rehabScore(f as unknown as Record<string, unknown>)}
+            <span className="text-sm text-gray-500 font-normal"> / {REHAB_SKILLS_TOTAL}</span>
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+          <div
+            className="h-full bg-emerald-500"
+            style={{ width: `${(rehabScore(f as unknown as Record<string, unknown>) / REHAB_SKILLS_TOTAL) * 100}%` }}
+          />
+        </div>
+        <div className="mt-3 grid gap-1 sm:grid-cols-2 text-sm">
+          {REHAB_SKILLS.map(s => {
+            const checked = (f as unknown as Record<string, unknown>)[s.key];
+            return (
+              <div key={s.key} className={`flex items-start gap-2 px-2 py-1 rounded ${checked ? 'text-emerald-800 bg-emerald-50' : 'text-gray-400'}`}>
+                <span>{checked ? '✓' : '·'}</span>
+                <span>{s.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       {/* Edit */}
       <Card>
         <H2>Foster record</H2>
@@ -261,15 +288,41 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
               ))}
             </select>
           </Field>
-          <Field label="Availability"><input name="availability" defaultValue={f.availability ?? ''} className={inputClass} /></Field>
-          <div className="sm:col-span-2 grid grid-cols-2 gap-2">
-            <CheckRow name="hasTransport" label="Has transport" defaultChecked={f.hasTransport} />
-            <CheckRow name="quarantineAble" label="Quarantine setup" defaultChecked={f.quarantineAble} />
-            <CheckRow name="tubeFeedingSkill" label="Tube feeding" defaultChecked={f.tubeFeedingSkill} />
-            <CheckRow name="woundCareSkill" label="Wound care" defaultChecked={f.woundCareSkill} />
-            <CheckRow name="neonateSkill" label="Neonates" defaultChecked={f.neonateSkill} />
-            <CheckRow name="longTermAble" label="Long-term" defaultChecked={f.longTermAble} />
+          <Field label="Preferred types" className="sm:col-span-2">
+            <input name="preferredTypes" defaultValue={f.preferredTypes ?? ''} className={inputClass} />
+          </Field>
+
+          <div className="sm:col-span-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+              Rehab skills ({rehabScore(f as unknown as Record<string, unknown>)} / {REHAB_SKILLS_TOTAL} checked)
+            </h4>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {REHAB_SKILLS.map(s => {
+                const checked = (f as unknown as Record<string, unknown>)[s.key];
+                return (
+                  <label key={s.key} className="flex items-start gap-2 text-sm rounded-lg p-2 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name={s.key}
+                      defaultChecked={!!checked}
+                      className="h-4 w-4 mt-0.5 rounded border-gray-300"
+                    />
+                    <span>{s.label}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
+
+          <div className="sm:col-span-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Transport</h4>
+            <CheckRow name="canTransportSelf" label="Can transport birds themselves" defaultChecked={f.canTransportSelf} />
+          </div>
+
+          <div className="sm:col-span-2">
+            <CheckRow name="longTermAble" label="Available for long-term foster" defaultChecked={f.longTermAble} />
+          </div>
+
           <Field label="Notes" className="sm:col-span-2">
             <textarea name="notes" defaultValue={f.notes ?? ''} rows={3} className={inputClass} />
           </Field>

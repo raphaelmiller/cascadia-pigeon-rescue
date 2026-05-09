@@ -122,6 +122,48 @@ export const REHAB_PROFICIENCY_LABEL: Record<string, string> = {
 // Legacy alias kept so old imports don't break during rollout.
 export const MEDICAL_SKILLS = REHAB_PROFICIENCY;
 
+// =====================================================================
+// FOSTER REHAB SKILL CHECKLIST
+// 17 skills — each maps to a Boolean field on Foster. Score = # checked / 17.
+// Order is the order Rafa wrote them (preserved on purpose so muscle memory works).
+// =====================================================================
+export const REHAB_SKILLS: { key: string; label: string }[] = [
+  { key: 'skillEnrichment',      label: 'Puts effort into enrichment' },
+  { key: 'skillOralMeds',        label: 'Can give oral meds' },
+  { key: 'skillSyringeFeed',     label: 'Can syringe feed' },
+  { key: 'skillTubeFeed',        label: 'Can tube feed' },
+  { key: 'skillQuarantine',      label: 'Solid understanding of quarantine procedures / hygiene' },
+  { key: 'skillWoundCare',       label: 'Proficient at wound care' },
+  { key: 'skillNeonates',        label: 'Neonates' },
+  { key: 'skillFootBandages',    label: 'Proficient at foot bandages' },
+  { key: 'skillBoots',           label: 'Proficient at boots' },
+  { key: 'skillWingWraps',       label: 'Proficient at wing wraps' },
+  { key: 'skillSubqFluids',      label: 'Can give subq fluids' },
+  { key: 'skillIMInjections',    label: 'Can give IM injections' },
+  { key: 'skillCompoundMeds',    label: 'Can compound meds' },
+  { key: 'skillCropSwabsFecals', label: 'Can do crop swabs and fecals' },
+  { key: 'skillCageTime',        label: 'Able to give birds sufficient time out of cage' },
+  { key: 'skillBirdLights',      label: 'Has bird lights' },
+  { key: 'skillSupplements',     label: 'Gives grit, vitamins, calcium, probiotics' },
+];
+
+export const REHAB_SKILLS_TOTAL = REHAB_SKILLS.length; // 17
+
+export function rehabScore(foster: Record<string, unknown>): number {
+  let n = 0;
+  for (const s of REHAB_SKILLS) if (foster[s.key]) n++;
+  return n;
+}
+
+export function rehabScoreTone(score: number): string {
+  // 0–5 -> blue (room to grow), 6–11 -> yellow, 12–16 -> green, 17 -> purple
+  if (score === REHAB_SKILLS_TOTAL) return 'purple';
+  if (score >= 12) return 'green';
+  if (score >= 6) return 'yellow';
+  if (score >= 1) return 'blue';
+  return 'gray';
+}
+
 // Foster stress → color tone (the brief asks for an exact 6-color ramp)
 export function stressTone(level: number | null | undefined): string {
   if (level == null) return 'gray';

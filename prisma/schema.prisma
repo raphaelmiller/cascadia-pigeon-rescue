@@ -68,17 +68,34 @@ model Foster {
   phone           String?
   email           String?
   address         String?
-  hasTransport    Boolean  @default(false)
   capacity        Int      @default(0)
-  quarantineAble  Boolean  @default(false)
-  medicalSkill    String   @default("none") // none / basic / intermediate / advanced
-  tubeFeedingSkill Boolean @default(false)
-  woundCareSkill  Boolean  @default(false)
-  neonateSkill    Boolean  @default(false)
-  longTermAble    Boolean  @default(false)
+  medicalSkill    String   @default("beginner") // rehab proficiency: beginner / intermediate / advanced
   preferredTypes  String?
-  availability    String?  // free-text or "available"/"limited"/"unavailable"
+  longTermAble    Boolean  @default(false)
   notes           String?
+
+  // Transport ability (separate section per Rafa)
+  canTransportSelf Boolean @default(false)
+
+  // Rehab skills checklist (17 items — score = number checked / 17)
+  // The first three map to legacy fields so existing data is preserved.
+  skillEnrichment       Boolean @default(false)
+  skillOralMeds         Boolean @default(false)
+  skillSyringeFeed      Boolean @default(false)
+  skillTubeFeed         Boolean @default(false)  // was tubeFeedingSkill
+  skillQuarantine       Boolean @default(false)  // was quarantineAble (renamed)
+  skillWoundCare        Boolean @default(false)  // was woundCareSkill
+  skillNeonates         Boolean @default(false)  // was neonateSkill
+  skillFootBandages     Boolean @default(false)
+  skillBoots            Boolean @default(false)
+  skillWingWraps        Boolean @default(false)
+  skillSubqFluids       Boolean @default(false)
+  skillIMInjections     Boolean @default(false)
+  skillCompoundMeds     Boolean @default(false)
+  skillCropSwabsFecals  Boolean @default(false)
+  skillCageTime         Boolean @default(false)
+  skillBirdLights       Boolean @default(false)
+  skillSupplements      Boolean @default(false)
 
   // Live state
   whiteboardNote  String?  // persistent urgent standing concern
