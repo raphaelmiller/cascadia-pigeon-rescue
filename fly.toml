@@ -5,7 +5,7 @@
 # (also via secrets). No volume mount needed because uploads live in R2.
 
 app = 'cascadia-pigeon-rescue'
-primary_region = 'sea'
+primary_region = 'sjc'
 
 [build]
   # Dockerfile in repo root drives the build.
