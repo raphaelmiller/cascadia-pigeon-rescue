@@ -3,11 +3,13 @@ import { redirect } from 'next/navigation';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
 import { SHIFT_TYPES, SHIFT_TYPE_TONE } from '@/lib/constants';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createVolunteer(formData: FormData) {
   'use server';
+  await requireOperator();
   const linkedFosterId = String(formData.get('linkedFosterId') || '') || null;
   let baseData: Record<string, unknown> = {
     name: String(formData.get('name') || '').trim(),
@@ -37,6 +39,7 @@ async function createVolunteer(formData: FormData) {
 
 async function createShift(formData: FormData) {
   'use server';
+  await requireOperator();
   const startsAt = String(formData.get('startsAt') || '');
   const endsAt = String(formData.get('endsAt') || '');
   if (!startsAt || !endsAt) return;
@@ -55,6 +58,7 @@ async function createShift(formData: FormData) {
 
 async function claimShift(id: string, volunteerId: string) {
   'use server';
+  await requireOperator();
   await prisma.rescueShift.update({ where: { id }, data: { volunteerId: volunteerId || null } });
   redirect('/rescue');
 }
@@ -230,7 +234,7 @@ function ShiftRow({
           {shift.notes ? ` · ${shift.notes}` : ''}
         </div>
       </div>
-      <form action={async (fd) => { 'use server'; await claim(shift.id, String(fd.get('vid') || '')); }}>
+      <form action={async (fd) => { 'use server'; await requireOperator(); await claim(shift.id, String(fd.get('vid') || '')); }}>
         <select name="vid" defaultValue={shift.volunteerId || ''} className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs">
           <option value="">— open —</option>
           {volunteers.map(v => (<option key={v.id} value={v.id}>{v.name}</option>))}

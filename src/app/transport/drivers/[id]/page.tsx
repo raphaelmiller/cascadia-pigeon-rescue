@@ -5,11 +5,13 @@ import { H1, H2, Card, Pill, Btn, Field, inputClass } from '@/components/ui';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { TRANSPORT_STATUS_TONE } from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function updateDriver(id: string, formData: FormData) {
   'use server';
+  await requireOperator();
   await prisma.transportVolunteer.update({
     where: { id },
     data: {
@@ -30,6 +32,7 @@ async function updateDriver(id: string, formData: FormData) {
 
 async function deleteDriver(id: string) {
   'use server';
+  await requireOperator();
   await prisma.transportVolunteer.delete({ where: { id } });
   redirect('/transport');
 }

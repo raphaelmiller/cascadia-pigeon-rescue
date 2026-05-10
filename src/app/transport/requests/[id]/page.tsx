@@ -5,11 +5,13 @@ import { H1, H2, Card, Pill, Btn, Field, inputClass } from '@/components/ui';
 import { fmtDateTime, fmtRelative, daysUntil, isOverdue } from '@/lib/utils';
 import { TRANSPORT_STATUSES, TRANSPORT_STATUS_TONE, REQUEST_URGENCIES, URGENCY_TONE } from '@/lib/constants';
 import { activeBirdWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function updateRequest(id: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const pickupBy = String(formData.get('pickupBy') || '');
   const fromAddress = String(formData.get('fromAddress') || '').trim();
   const toAddress = String(formData.get('toAddress') || '').trim();
@@ -34,6 +36,7 @@ async function updateRequest(id: string, formData: FormData) {
 
 async function deleteRequest(id: string) {
   'use server';
+  await requireOperator();
   await prisma.transportRequest.delete({ where: { id } });
   redirect('/transport');
 }
@@ -157,22 +160,22 @@ export default async function TransportRequestDetail({
         <H2>Quick actions</H2>
         <div className="mt-3 flex gap-2 flex-wrap">
           {req.status !== 'assigned' && (
-            <form action={async () => { 'use server'; await prisma.transportRequest.update({ where: { id }, data: { status: 'assigned' } }); redirect(`/transport/requests/${id}`); }}>
+            <form action={async () => { 'use server'; await requireOperator(); await prisma.transportRequest.update({ where: { id }, data: { status: 'assigned' } }); redirect(`/transport/requests/${id}`); }}>
               <Btn type="submit" variant="ghost">Mark assigned</Btn>
             </form>
           )}
           {req.status !== 'in_transit' && (
-            <form action={async () => { 'use server'; await prisma.transportRequest.update({ where: { id }, data: { status: 'in_transit' } }); redirect(`/transport/requests/${id}`); }}>
+            <form action={async () => { 'use server'; await requireOperator(); await prisma.transportRequest.update({ where: { id }, data: { status: 'in_transit' } }); redirect(`/transport/requests/${id}`); }}>
               <Btn type="submit" variant="ghost">Mark in transit</Btn>
             </form>
           )}
           {req.status !== 'delivered' && (
-            <form action={async () => { 'use server'; await prisma.transportRequest.update({ where: { id }, data: { status: 'delivered' } }); redirect(`/transport/requests/${id}`); }}>
+            <form action={async () => { 'use server'; await requireOperator(); await prisma.transportRequest.update({ where: { id }, data: { status: 'delivered' } }); redirect(`/transport/requests/${id}`); }}>
               <Btn type="submit" variant="primary">Delivered ✓</Btn>
             </form>
           )}
           {req.status !== 'cancelled' && (
-            <form action={async () => { 'use server'; await prisma.transportRequest.update({ where: { id }, data: { status: 'cancelled' } }); redirect(`/transport/requests/${id}`); }}>
+            <form action={async () => { 'use server'; await requireOperator(); await prisma.transportRequest.update({ where: { id }, data: { status: 'cancelled' } }); redirect(`/transport/requests/${id}`); }}>
               <Btn type="submit" variant="ghost">Cancel job</Btn>
             </form>
           )}

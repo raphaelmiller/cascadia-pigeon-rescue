@@ -10,6 +10,7 @@ import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass, StatusDot } from '@/
 import { fmtDateTime, fmtRelative, daysUntil, isOverdue } from '@/lib/utils';
 import { URGENCY_TONE, REQUEST_URGENCIES, TRANSPORT_STATUS_TONE } from '@/lib/constants';
 import { activeBirdWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ type ViewMode = 'day' | 'week' | 'month';
 // ---------- Server actions ----------
 async function createRequest(formData: FormData) {
   'use server';
+  await requireOperator();
   const fromAddress = String(formData.get('fromAddress') || '').trim();
   const toAddress = String(formData.get('toAddress') || '').trim();
   const pickupBy = String(formData.get('pickupBy') || '');
@@ -40,6 +42,7 @@ async function createRequest(formData: FormData) {
 
 async function createVolunteer(formData: FormData) {
   'use server';
+  await requireOperator();
   const linkedFosterId = String(formData.get('linkedFosterId') || '') || null;
   let baseData: Record<string, unknown> = {
     name: String(formData.get('name') || '').trim(),
@@ -118,7 +121,7 @@ export default async function TransportPage({
             {allActive.length} active · {unassigned.length} unassigned · {inTransit.length} in transit · {todays.length} today
           </p>
         </div>
-        <Btn href="/transport/calendar" variant="ghost">Full calendar →</Btn>
+        <Btn href="/calendar?tab=transport" variant="ghost">Full calendar →</Btn>
       </div>
 
       {/* Today's coverage banner */}
