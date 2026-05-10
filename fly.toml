@@ -1,0 +1,39 @@
+# Cascadia Pigeon Rescue — fly.io config
+#
+# Single-instance app behind shared admin password. Storage goes to
+# Cloudflare R2 (set via `fly secrets set R2_*`); DB goes to Turso
+# (also via secrets). No volume mount needed because uploads live in R2.
+
+app = 'cascadia-pigeon-rescue'
+primary_region = 'sea'
+
+[build]
+  # Dockerfile in repo root drives the build.
+
+[env]
+  PORT = '3000'
+  NODE_ENV = 'production'
+  HOSTNAME = '0.0.0.0'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # Allow scale-to-zero for cost savings on a low-traffic ops app.
+  min_machines_running = 0
+  processes = ['app']
+
+  [[http_service.checks]]
+    grace_period = '15s'
+    interval = '30s'
+    method = 'GET'
+    path = '/api/health'
+    protocol = 'http'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1

@@ -45,3 +45,10 @@ next-env.d.ts
 # Local SQLite + env
 /prisma/dev.db
 /prisma/dev.db-journal
+
+# User-uploaded files (served via /api/uploads/...)
+uploads/
+
+# Root SQLite (legacy location)
+/dev.db
+/dev.db-journal

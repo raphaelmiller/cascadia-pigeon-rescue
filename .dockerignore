@@ -1,0 +1,45 @@
+# Build context exclusions — keep the image small and the build cache hot.
+
+# Node + build artifacts
+node_modules
+.next
+out
+build
+
+# Local DBs + uploads must not be baked into the image.
+prisma/dev.db
+prisma/dev.db-journal
+uploads
+public/uploads
+
+# Local env + secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS junk
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Tests / scratch
+coverage
+.nyc_output
+scratch
+.scratch
+
+# Git
+.git
+.gitignore
+
+# Docs that don't need to be in the image
+README.md
+DEPLOY.md
+AGENTS.md
+CLAUDE.md
