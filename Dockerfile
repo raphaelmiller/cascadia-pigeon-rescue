@@ -49,20 +49,22 @@ ENV HOSTNAME=0.0.0.0
 
 # Drop privileges — Next runs fine as a non-root user.
 RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
+ && adduser  --system --uid 1001 nextjs \
+ && chown -R nextjs:nodejs /app
 
 # We don't use Next's `output: 'standalone'` because Prisma's client + the
 # libSQL adapter want the full node_modules tree available at runtime.
 # Copy the production deps and the built artifacts.
-COPY --from=builder /app/package.json       ./package.json
-COPY --from=builder /app/package-lock.json* ./package-lock.json
-COPY --from=builder /app/node_modules       ./node_modules
-COPY --from=builder /app/.next              ./.next
-COPY --from=builder /app/public             ./public
-COPY --from=builder /app/prisma             ./prisma
+# --chown ensures the nextjs user can actually read these at runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/package.json       ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/package-lock.json* ./package-lock.json
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules       ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next              ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
+COPY --from=builder --chown=nextjs:nodejs /app/prisma             ./prisma
 
 # next.config.ts is referenced by `next start` at boot.
-COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 
 USER nextjs
 EXPOSE 3000
