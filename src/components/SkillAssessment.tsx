@@ -63,7 +63,7 @@ export function SkillAssessment({
       {/* Scoreboards */}
       <div className="grid gap-3 sm:grid-cols-2">
         <ScoreCard
-          title="Clinical Competency"
+          title="Care Proficiency"
           score={clinical}
           max={MAX_CLINICAL}
           category={clinicalCategory(clinical)}
@@ -107,7 +107,7 @@ export function SkillAssessment({
                         : 'text-violet-700'
                     }
                   >
-                    {tier.scoreCategory === 'clinical' ? 'Clinical' : 'Quality of Care'}
+                    {tier.scoreCategory === 'clinical' ? 'Care' : 'Quality of Care'}
                   </span>
                 </p>
               </div>

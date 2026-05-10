@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bird, Home, Pill, Inbox, NotebookPen, Calendar,
-  Truck, Siren, Bandage, Boxes, BellRing, Archive,
+  Truck, Siren, Bandage, Boxes, BellRing, Archive, LogOut,
 } from 'lucide-react';
+import { logoutAction } from '@/lib/auth-actions';
 
 const PRIMARY_NAV = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,8 +18,6 @@ const PRIMARY_NAV = [
 const SECONDARY_NAV = [
   { href: '/digest', label: 'Digest', icon: BellRing },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/transport/calendar', label: 'Transport Cal', icon: Truck },
-  { href: '/rescue/calendar', label: 'Rescue Cal', icon: Siren },
   { href: '/updates', label: 'Updates', icon: NotebookPen },
   { href: '/transport', label: 'Drivers', icon: Truck },
   { href: '/rescue', label: 'Rescuers', icon: Siren },
@@ -38,6 +37,8 @@ const MOBILE_NAV = [
 
 export function Nav() {
   const pathname = usePathname();
+  // Hide the global nav on auth pages — the login screen has its own self-contained layout.
+  if (pathname === '/login') return null;
   return (
     <>
       {/* Desktop / tablet header */}
@@ -48,6 +49,16 @@ export function Nav() {
             <span>CPR Ops</span>
           </Link>
           <nav className="flex items-center gap-1 flex-wrap justify-end">
+            <form action={logoutAction} className="order-last">
+              <button
+                type="submit"
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition"
+                title="Sign out"
+              >
+                <LogOut size={14} />
+                <span className="sr-only">Sign out</span>
+              </button>
+            </form>
             {[...PRIMARY_NAV, ...SECONDARY_NAV].map(({ href, label, icon: Icon }) => {
               const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
               return (
@@ -74,7 +85,11 @@ export function Nav() {
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white">🕊️</span>
             <span>CPR Ops</span>
           </Link>
-          <span className="text-xs text-gray-500">Operations</span>
+          <form action={logoutAction}>
+            <button type="submit" className="text-xs text-gray-500 hover:text-gray-800 inline-flex items-center gap-1">
+              <LogOut size={12} /> Sign out
+            </button>
+          </form>
         </div>
       </header>
 

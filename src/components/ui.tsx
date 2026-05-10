@@ -22,13 +22,16 @@ export function Card({
   children,
   className = '',
   tone = 'gray',
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
   tone?: string;
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={`rounded-2xl bg-white shadow-sm border ${TONE_BORDER[tone] || 'border-gray-200'} p-4 md:p-5 ${className}`}
     >
       {children}
