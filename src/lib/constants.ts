@@ -179,6 +179,7 @@ export const SKILL_TIERS: SkillTier[] = [
     scoreCategory: 'clinical',
     items: [
       { key: 'skillCropSwabsFecals',  label: 'Can perform crop swabs and fecals' },
+      { key: 'skillCropFlushes',      label: 'Can perform crop flushes' },
       { key: 'skillIMInjections',     label: 'Can give IM injections' },
       { key: 'skillSubqFluids',       label: 'Can administer subq fluids' },
       { key: 'skillNeonates',         label: 'Experienced with neonates' },

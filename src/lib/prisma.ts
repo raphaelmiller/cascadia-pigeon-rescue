@@ -1,5 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import path from 'node:path';
+import { env } from '@/lib/env';
+
+// Validate environment variables at module-load time. Fails fast in prod
+// when the data plane isn't configured.
+void env;
 
 // Singleton — Next.js reloads modules and would otherwise leak connections.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
