@@ -5,43 +5,63 @@ import { H1, H2, Card, Btn, Empty, Field, inputClass, Pill } from '@/components/
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { stressTone } from '@/lib/constants';
 import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
+import { saveUploads } from '@/lib/uploads';
+import { parseForm, dailyUpdateSchema } from '@/lib/schemas';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createUpdate(formData: FormData) {
   'use server';
-  const birdId = String(formData.get('birdId') || '');
-  const fosterId = String(formData.get('fosterId') || '');
-  if (!birdId || !fosterId) return;
-  const stress = formData.get('stressLevel') ? Number(formData.get('stressLevel')) : null;
+  await requireOperator();
+  const validated = parseForm(dailyUpdateSchema, formData);
+  const { birdId, fosterId, stressLevel, whiteboardUpdate, ...rest } = validated;
+  const wb = whiteboardUpdate ? whiteboardUpdate.trim() : null;
 
-  await prisma.dailyUpdate.create({
-    data: {
-      birdId,
-      fosterId,
-      healthStatus: String(formData.get('healthStatus') || '') || null,
-      eatingDrinking: String(formData.get('eatingDrinking') || '') || null,
-      poopQuality: String(formData.get('poopQuality') || '') || null,
-      energyLevel: String(formData.get('energyLevel') || '') || null,
-      medsAdministered: String(formData.get('medsAdministered') || '') || null,
-      stressLevel: stress,
-      concerns: String(formData.get('concerns') || '') || null,
-      whiteboardUpdate: String(formData.get('whiteboardUpdate') || '') || null,
-      notes: String(formData.get('notes') || '') || null,
-    },
+  // One transaction: create the daily update, optionally update foster
+  // stress + whiteboard, log wellness. Either everything lands or nothing
+  // does — prevents the read-update-vs-write race the old code had.
+  const created = await prisma.$transaction(async tx => {
+    const update = await tx.dailyUpdate.create({
+      data: {
+        birdId,
+        fosterId,
+        ...rest,
+        stressLevel,
+        whiteboardUpdate: wb,
+      },
+    });
+    if (stressLevel != null) {
+      await tx.foster.update({
+        where: { id: fosterId },
+        data: { currentStress: stressLevel },
+      });
+      await tx.wellnessLog.create({
+        data: { fosterId, stressLevel, notes: 'auto from daily update' },
+      });
+    }
+    if (wb) {
+      await tx.foster.update({ where: { id: fosterId }, data: { whiteboardNote: wb } });
+    }
+    return update;
   });
 
-  // Cascade: stress level updates foster's currentStress + log a wellness entry
-  if (stress != null) {
-    await prisma.$transaction([
-      prisma.foster.update({ where: { id: fosterId }, data: { currentStress: stress } }),
-      prisma.wellnessLog.create({ data: { fosterId, stressLevel: stress, notes: 'auto from daily update' } }),
-    ]);
-  }
-  // If whiteboardUpdate provided, replace
-  const wb = String(formData.get('whiteboardUpdate') || '').trim();
-  if (wb) {
-    await prisma.foster.update({ where: { id: fosterId }, data: { whiteboardNote: wb } });
+  // Photos attached to the update (optional, multiple). Done outside the
+  // transaction because file IO can fail without rolling back the metadata
+  // — better to have an update with no photos than a phantom transaction.
+  const photoFiles = formData.getAll('photos');
+  const saved = await saveUploads(photoFiles, 'updates', { allow: 'image' });
+  if (saved.length > 0) {
+    await prisma.$transaction(
+      saved.map(s => prisma.dailyUpdatePhoto.create({
+        data: {
+          dailyUpdateId: created.id,
+          url: s.url,
+          originalName: s.originalName,
+          mimeType: s.mimeType,
+        },
+      })),
+    );
   }
 
   redirect('/updates');
@@ -51,7 +71,7 @@ export default async function UpdatesPage() {
   const [updates, birds, fosters] = await Promise.all([
     prisma.dailyUpdate.findMany({
       where: { bird: activeBirdWhere, foster: activeFosterWhere },
-      include: { bird: true, foster: true },
+      include: { bird: true, foster: true, photos: true },
       orderBy: { createdAt: 'desc' },
       take: 30,
     }),
@@ -65,7 +85,7 @@ export default async function UpdatesPage() {
 
       <Card tone="green">
         <H2>Submit an update</H2>
-        <form action={createUpdate} className="grid gap-3 sm:grid-cols-2 mt-3">
+        <form action={createUpdate} className="grid gap-3 sm:grid-cols-2 mt-3" encType="multipart/form-data">
           <Field label="Bird *">
             <select required name="birdId" defaultValue="" className={inputClass}>
               <option value="">— select —</option>
@@ -108,6 +128,15 @@ export default async function UpdatesPage() {
           <Field label="Notes" className="sm:col-span-2">
             <textarea name="notes" rows={2} className={inputClass} />
           </Field>
+          <Field label="Photos (optional)" className="sm:col-span-2">
+            <input
+              type="file"
+              name="photos"
+              accept="image/*"
+              multiple
+              className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-800 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-teal-100"
+            />
+          </Field>
           <div className="sm:col-span-2"><Btn type="submit" variant="primary">Submit update</Btn></div>
         </form>
       </Card>
@@ -132,6 +161,16 @@ export default async function UpdatesPage() {
                 </div>
                 {u.concerns && <div className="text-sm mt-1 text-orange-700">⚠ {u.concerns}</div>}
                 {u.notes && <div className="text-sm text-gray-600 mt-0.5">{u.notes}</div>}
+                {u.photos && u.photos.length > 0 && (
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    {u.photos.map(p => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                        <img src={p.url} alt="daily update photo" className="h-20 w-20 rounded-lg object-cover ring-1 ring-gray-200 hover:ring-teal-400 transition" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -5,35 +5,57 @@ import { H1, H2, Card, Pill, Btn, Empty } from '@/components/ui';
 import { fmtDate, fmtRelative } from '@/lib/utils';
 import { STATUS_LABELS, STATUS_TONE, stressLabel, stressTone } from '@/lib/constants';
 import { StatusDot } from '@/components/ui';
+import { deleteUpload } from '@/lib/uploads';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function restoreBird(id: string) {
   'use server';
+  await requireOperator();
   await prisma.bird.update({ where: { id }, data: { archivedAt: null, deletedAt: null } });
   redirect('/archive');
 }
 
 async function permaDeleteBird(id: string) {
   'use server';
+  await requireOperator();
+  // Collect all upload URLs attached to this bird before the row goes away.
+  // Cascade deletes the DB rows, but the files on disk are ours to clean up.
+  const photos = await prisma.photo.findMany({ where: { birdId: id }, select: { url: true } });
+  const updatePhotos = await prisma.dailyUpdatePhoto.findMany({
+    where: { dailyUpdate: { birdId: id } },
+    select: { url: true },
+  });
   await prisma.bird.delete({ where: { id } });
+  // Best-effort file cleanup AFTER the DB delete succeeds. Failures here are
+  // logged elsewhere by deleteUpload and shouldn't undo the DB operation.
+  await Promise.all([
+    ...photos.map(p => deleteUpload(p.url)),
+    ...updatePhotos.map(p => deleteUpload(p.url)),
+  ]);
   redirect('/archive');
 }
 
 async function restoreFoster(id: string) {
   'use server';
+  await requireOperator();
   await prisma.foster.update({ where: { id }, data: { archivedAt: null, deletedAt: null } });
   redirect('/archive');
 }
 
 async function permaDeleteFoster(id: string) {
   'use server';
+  await requireOperator();
+  const foster = await prisma.foster.findUnique({ where: { id }, select: { photoUrl: true } });
   await prisma.foster.delete({ where: { id } });
+  if (foster?.photoUrl) await deleteUpload(foster.photoUrl);
   redirect('/archive');
 }
 
 async function softDeleteAllArchivedBirds() {
   'use server';
+  await requireOperator();
   await prisma.bird.updateMany({
     where: { archivedAt: { not: null }, deletedAt: null },
     data: { deletedAt: new Date() },
@@ -81,10 +103,10 @@ export default async function ArchivePage() {
                 <Link href={`/birds/${b.id}`} className="font-medium text-teal-700 hover:underline">{b.name}</Link>
                 <Pill tone={STATUS_TONE[b.status] || 'gray'}>{STATUS_LABELS[b.status] || b.status}</Pill>
                 <span className="text-xs text-gray-500 ml-auto">archived {fmtRelative(b.archivedAt)}</span>
-                <form action={async () => { 'use server'; await restoreBird(b.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await restoreBird(b.id); }}>
                   <Btn type="submit" variant="primary">↺ Restore</Btn>
                 </form>
-                <form action={async () => { 'use server'; await prisma.bird.update({ where: { id: b.id }, data: { deletedAt: new Date() } }); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await prisma.bird.update({ where: { id: b.id }, data: { deletedAt: new Date() } }); }}>
                   <Btn type="submit" variant="danger">→ Trash</Btn>
                 </form>
               </li>
@@ -104,10 +126,10 @@ export default async function ArchivePage() {
                 <span className="font-medium line-through">{b.name}</span>
                 <Pill tone={STATUS_TONE[b.status] || 'gray'}>{STATUS_LABELS[b.status] || b.status}</Pill>
                 <span className="text-xs text-gray-500 ml-auto">deleted {fmtRelative(b.deletedAt)}</span>
-                <form action={async () => { 'use server'; await restoreBird(b.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await restoreBird(b.id); }}>
                   <Btn type="submit" variant="primary">↺ Restore</Btn>
                 </form>
-                <form action={async () => { 'use server'; await permaDeleteBird(b.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await permaDeleteBird(b.id); }}>
                   <Btn type="submit" variant="danger">⚠ Permanently delete</Btn>
                 </form>
               </li>
@@ -127,10 +149,10 @@ export default async function ArchivePage() {
                 <Link href={`/fosters/${f.id}`} className="font-medium text-teal-700 hover:underline">{f.name}</Link>
                 <span className="text-xs text-gray-500">{stressLabel(f.currentStress)}</span>
                 <span className="text-xs text-gray-500 ml-auto">archived {fmtRelative(f.archivedAt)}</span>
-                <form action={async () => { 'use server'; await restoreFoster(f.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await restoreFoster(f.id); }}>
                   <Btn type="submit" variant="primary">↺ Restore</Btn>
                 </form>
-                <form action={async () => { 'use server'; await prisma.foster.update({ where: { id: f.id }, data: { deletedAt: new Date() } }); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await prisma.foster.update({ where: { id: f.id }, data: { deletedAt: new Date() } }); }}>
                   <Btn type="submit" variant="danger">→ Trash</Btn>
                 </form>
               </li>
@@ -149,10 +171,10 @@ export default async function ArchivePage() {
                 <StatusDot tone="red" />
                 <span className="font-medium line-through">{f.name}</span>
                 <span className="text-xs text-gray-500 ml-auto">deleted {fmtRelative(f.deletedAt)}</span>
-                <form action={async () => { 'use server'; await restoreFoster(f.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await restoreFoster(f.id); }}>
                   <Btn type="submit" variant="primary">↺ Restore</Btn>
                 </form>
-                <form action={async () => { 'use server'; await permaDeleteFoster(f.id); }}>
+                <form action={async () => { 'use server'; await requireOperator(); await permaDeleteFoster(f.id); }}>
                   <Btn type="submit" variant="danger">⚠ Permanently delete</Btn>
                 </form>
               </li>

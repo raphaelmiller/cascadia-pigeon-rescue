@@ -5,11 +5,13 @@ import { fmtRelative } from '@/lib/utils';
 import { URGENCY_TONE, REQUEST_STATUSES } from '@/lib/constants';
 import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 import { redirect } from 'next/navigation';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function setStatus(id: string, status: string) {
   'use server';
+  await requireOperator();
   await prisma.request.update({ where: { id }, data: { status } });
   redirect('/requests');
 }
@@ -67,12 +69,12 @@ export default async function RequestsPage({
                 </div>
                 <div className="mt-3 flex gap-2 flex-wrap">
                   {r.status !== 'in_progress' && (
-                    <form action={async () => { 'use server'; await prisma.request.update({ where: { id: r.id }, data: { status: 'in_progress' } }); }}>
+                    <form action={async () => { 'use server'; await requireOperator(); await prisma.request.update({ where: { id: r.id }, data: { status: 'in_progress' } }); }}>
                       <Btn type="submit" variant="ghost">Mark in progress</Btn>
                     </form>
                   )}
                   {r.status !== 'resolved' && (
-                    <form action={async () => { 'use server'; await prisma.request.update({ where: { id: r.id }, data: { status: 'resolved' } }); }}>
+                    <form action={async () => { 'use server'; await requireOperator(); await prisma.request.update({ where: { id: r.id }, data: { status: 'resolved' } }); }}>
                       <Btn type="submit" variant="primary">Mark resolved</Btn>
                     </form>
                   )}

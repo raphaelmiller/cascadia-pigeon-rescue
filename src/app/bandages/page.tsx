@@ -4,11 +4,13 @@ import { redirect } from 'next/navigation';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass, StatusDot } from '@/components/ui';
 import { fmtDateTime, daysUntil } from '@/lib/utils';
 import { activeBirdWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createTask(formData: FormData) {
   'use server';
+  await requireOperator();
   const birdId = String(formData.get('birdId') || '');
   const description = String(formData.get('description') || '').trim();
   const intervalDays = Number(formData.get('intervalDays') || 2);
@@ -28,6 +30,7 @@ async function createTask(formData: FormData) {
 
 async function markDone(id: string) {
   'use server';
+  await requireOperator();
   const t = await prisma.bandageTask.findUnique({ where: { id } });
   if (!t) return;
   const next = new Date(Date.now() + t.intervalDays * 86400000);
@@ -43,6 +46,7 @@ async function markDone(id: string) {
 
 async function deactivate(id: string) {
   'use server';
+  await requireOperator();
   await prisma.bandageTask.update({ where: { id }, data: { active: false } });
   redirect('/bandages');
 }
@@ -146,8 +150,8 @@ function BandageList({
               </div>
             </div>
             <Pill tone={tone}>{days < 0 ? `${-days}d overdue` : days === 0 ? 'today' : `${days}d`}</Pill>
-            <form action={async () => { 'use server'; await markDone(t.id); }}><Btn type="submit" variant="primary">Done ✓</Btn></form>
-            <form action={async () => { 'use server'; await deactivate(t.id); }}><Btn type="submit" variant="ghost">End</Btn></form>
+            <form action={async () => { 'use server'; await requireOperator(); await markDone(t.id); }}><Btn type="submit" variant="primary">Done ✓</Btn></form>
+            <form action={async () => { 'use server'; await requireOperator(); await deactivate(t.id); }}><Btn type="submit" variant="ghost">End</Btn></form>
           </li>
         );
       })}

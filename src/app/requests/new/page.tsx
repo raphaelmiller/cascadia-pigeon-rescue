@@ -3,11 +3,13 @@ import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
 import { REQUEST_TYPES, REQUEST_URGENCIES } from '@/lib/constants';
 import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createRequest(formData: FormData) {
   'use server';
+  await requireOperator();
   const fosterId = String(formData.get('fosterId') || '');
   if (!fosterId) return;
   await prisma.request.create({

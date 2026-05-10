@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Nav } from '@/components/Nav';
+import { MaybeMain } from '@/components/MaybeMain';
 
 export const metadata: Metadata = {
   title: 'Cascadia Pigeon Rescue · Operations',
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="min-h-screen pb-24 md:pb-0">
         <Nav />
-        <main className="mx-auto max-w-6xl px-4 py-4 md:px-6 md:py-8">{children}</main>
+        <MaybeMain>{children}</MaybeMain>
       </body>
     </html>
   );

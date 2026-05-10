@@ -2,11 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass, StatusDot } from '@/components/ui';
 import { SUPPLY_CATEGORIES } from '@/lib/constants';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createSupply(formData: FormData) {
   'use server';
+  await requireOperator();
   const name = String(formData.get('name') || '').trim();
   if (!name) return;
   await prisma.supply.create({
@@ -25,6 +27,7 @@ async function createSupply(formData: FormData) {
 
 async function adjustOnHand(id: string, delta: number) {
   'use server';
+  await requireOperator();
   const s = await prisma.supply.findUnique({ where: { id } });
   if (!s) return;
   const next = Math.max(0, s.onHand + delta);
@@ -34,6 +37,7 @@ async function adjustOnHand(id: string, delta: number) {
 
 async function setOnHand(id: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const v = Number(formData.get('onHand') || 0);
   await prisma.supply.update({ where: { id }, data: { onHand: Math.max(0, v) } });
   redirect('/supplies');
@@ -95,8 +99,8 @@ export default async function SuppliesPage() {
                       </div>
                     </div>
                     <div className="flex gap-1 items-center">
-                      <form action={async () => { 'use server'; await adjustOnHand(s.id, -1); }}><Btn type="submit" variant="ghost">−1</Btn></form>
-                      <form action={async () => { 'use server'; await adjustOnHand(s.id, 1); }}><Btn type="submit" variant="ghost">+1</Btn></form>
+                      <form action={async () => { 'use server'; await requireOperator(); await adjustOnHand(s.id, -1); }}><Btn type="submit" variant="ghost">−1</Btn></form>
+                      <form action={async () => { 'use server'; await requireOperator(); await adjustOnHand(s.id, 1); }}><Btn type="submit" variant="ghost">+1</Btn></form>
                       <form action={setOnHand.bind(null, s.id)} className="flex items-center gap-1">
                         <input type="number" step="0.1" name="onHand" defaultValue={s.onHand} className="w-20 rounded-lg border border-gray-300 px-2 py-1 text-sm" />
                         <Btn type="submit" variant="ghost">Set</Btn>
