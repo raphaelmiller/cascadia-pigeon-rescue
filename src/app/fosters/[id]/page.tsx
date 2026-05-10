@@ -10,11 +10,15 @@ import {
 } from '@/lib/constants';
 import { SkillAssessment } from '@/components/SkillAssessment';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
+import { saveUpload, deleteUpload } from '@/lib/uploads';
+import { requireOperator } from '@/lib/auth';
+import { parseForm, fosterUpdateSchema } from '@/lib/schemas';
 
 export const dynamic = 'force-dynamic';
 
 async function logWellness(fosterId: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const stress = Math.max(1, Math.min(10, Number(formData.get('stressLevel') || 5)));
   await prisma.$transaction([
     prisma.wellnessLog.create({
@@ -39,6 +43,7 @@ async function logWellness(fosterId: string, formData: FormData) {
 
 async function updateWhiteboard(fosterId: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const note = String(formData.get('whiteboardNote') || '').trim() || null;
   await prisma.foster.update({ where: { id: fosterId }, data: { whiteboardNote: note } });
   redirect(`/fosters/${fosterId}`);
@@ -46,42 +51,54 @@ async function updateWhiteboard(fosterId: string, formData: FormData) {
 
 async function archiveFoster(fosterId: string) {
   'use server';
+  await requireOperator();
   await prisma.foster.update({ where: { id: fosterId }, data: { archivedAt: new Date(), deletedAt: null } });
   redirect(`/fosters/${fosterId}`);
 }
 
 async function softDeleteFoster(fosterId: string) {
   'use server';
+  await requireOperator();
   await prisma.foster.update({ where: { id: fosterId }, data: { deletedAt: new Date() } });
   redirect('/archive');
 }
 
 async function restoreFoster(fosterId: string) {
   'use server';
+  await requireOperator();
   await prisma.foster.update({ where: { id: fosterId }, data: { archivedAt: null, deletedAt: null } });
   redirect(`/fosters/${fosterId}`);
 }
 
 async function updateFoster(fosterId: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const skillData: Record<string, boolean> = {};
   for (const key of ALL_SKILL_KEYS) skillData[key] = formData.get(key) === 'on';
-  await prisma.foster.update({
-    where: { id: fosterId },
-    data: {
-      name: String(formData.get('name') || '').trim() || 'Foster',
-      phone: String(formData.get('phone') || '') || null,
-      email: String(formData.get('email') || '') || null,
-      address: String(formData.get('address') || '') || null,
-      capacity: Number(formData.get('capacity') || 0),
-      medicalSkill: String(formData.get('medicalSkill') || 'beginner'),
-      preferredTypes: String(formData.get('preferredTypes') || '') || null,
-      longTermAble: formData.get('longTermAble') === 'on',
-      canTransportSelf: formData.get('canTransportSelf') === 'on',
-      notes: String(formData.get('notes') || '') || null,
-      ...skillData,
-    },
-  });
+
+  // Profile photo handling
+  const validated = parseForm(fosterUpdateSchema, formData);
+  const data: Record<string, unknown> = { ...validated, ...skillData };
+  // Photo handling — a new upload wins over a remove request to avoid the
+  // "both checked" race that orphans the freshly uploaded file.
+  const photoFile = formData.get('photo');
+  const wantsRemove = formData.get('removePhoto') === 'on';
+  const hasNewPhoto = photoFile instanceof File && photoFile.size > 0;
+  if (hasNewPhoto || wantsRemove) {
+    const prev = await prisma.foster.findUnique({ where: { id: fosterId }, select: { photoUrl: true } });
+    if (hasNewPhoto) {
+      const saved = await saveUpload(photoFile as File, 'fosters', { allow: 'image' });
+      if (saved) {
+        if (prev?.photoUrl) await deleteUpload(prev.photoUrl);
+        data.photoUrl = saved.url;
+      }
+    } else if (wantsRemove) {
+      if (prev?.photoUrl) await deleteUpload(prev.photoUrl);
+      data.photoUrl = null;
+    }
+  }
+
+  await prisma.foster.update({ where: { id: fosterId }, data });
   redirect(`/fosters/${fosterId}`);
 }
 
@@ -113,6 +130,18 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
     <div className="space-y-4">
       <Link href="/fosters" className="text-sm text-teal-700 hover:underline">← Fosters</Link>
       <div className="flex items-start gap-3 flex-wrap">
+        {f.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={f.photoUrl}
+            alt={f.name}
+            className="h-16 w-16 rounded-full object-cover ring-2 ring-white shadow-md flex-shrink-0"
+          />
+        ) : (
+          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white flex items-center justify-center text-xl font-bold flex-shrink-0">
+            {f.name.charAt(0).toUpperCase()}
+          </div>
+        )}
         <StatusDot tone={tone} size="lg" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -255,7 +284,7 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
         <H2>Foster Skill & Care Assessment</H2>
         <div className="grid gap-3 sm:grid-cols-2 mt-3">
           <ScoreReadout
-            title="Clinical Competency"
+            title="Care Proficiency"
             score={clinicalScore(f as unknown as Record<string, unknown>)}
             max={MAX_CLINICAL}
             category={clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}
@@ -298,7 +327,32 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
       {/* Edit */}
       <Card>
         <H2>Foster record</H2>
-        <form action={editAction} className="grid gap-3 sm:grid-cols-2 mt-3">
+        <form action={editAction} className="grid gap-3 sm:grid-cols-2 mt-3" encType="multipart/form-data">
+          <div className="sm:col-span-2 rounded-xl bg-gray-50 ring-1 ring-gray-200 p-3 flex items-center gap-3">
+            {f.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={f.photoUrl} alt={f.name} className="h-14 w-14 rounded-full object-cover ring-2 ring-white shadow" />
+            ) : (
+              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white flex items-center justify-center text-lg font-bold">
+                {f.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase tracking-wide">Profile photo</label>
+              <input
+                type="file"
+                name="photo"
+                accept="image/*"
+                className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-800 file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-teal-100"
+              />
+              {f.photoUrl && (
+                <label className="mt-2 flex items-center gap-1.5 text-xs text-red-700">
+                  <input type="checkbox" name="removePhoto" className="rounded border-gray-300" />
+                  Remove existing photo
+                </label>
+              )}
+            </div>
+          </div>
           <Field label="Name"><input name="name" defaultValue={f.name} className={inputClass} /></Field>
           <Field label="Phone"><input name="phone" defaultValue={f.phone ?? ''} className={inputClass} /></Field>
           <Field label="Email"><input name="email" defaultValue={f.email ?? ''} className={inputClass} /></Field>
@@ -311,17 +365,13 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
               ))}
             </select>
           </Field>
-          <Field label="Preferred types" className="sm:col-span-2">
-            <input name="preferredTypes" defaultValue={f.preferredTypes ?? ''} className={inputClass} />
-          </Field>
           <div className="sm:col-span-2">
             <CheckRow name="longTermAble" label="Available for long-term foster" defaultChecked={f.longTermAble} />
           </div>
 
           {/* Transport — standalone section */}
           <div className="sm:col-span-2 rounded-xl bg-sky-50 ring-1 ring-sky-200 p-3 mt-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-800 mb-1">Transport</h4>
-            <p className="text-xs text-sky-900/70 mb-2">Tracked separately from the clinical assessment.</p>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-800 mb-2">Transport</h4>
             <CheckRow name="canTransportSelf" label="Can transport birds themselves" defaultChecked={f.canTransportSelf} />
           </div>
 

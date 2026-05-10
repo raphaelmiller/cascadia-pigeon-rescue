@@ -5,34 +5,25 @@ import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES, MEDICAL_PRIORITIES } from '@/lib/constants';
 import { fmtDate, fmtDateTime, fmtRelative } from '@/lib/utils';
 import { activeFosterWhere } from '@/lib/filters';
+import { saveUpload, saveUploads, deleteUpload } from '@/lib/uploads';
+import { getBirdSnapshot } from '@/lib/birdSnapshot';
+import { PhotoLightbox } from '@/components/PhotoLightbox';
+import { requireOperator } from '@/lib/auth';
+import { parseForm, birdUpdateSchema } from '@/lib/schemas';
 
 export const dynamic = 'force-dynamic';
 
 async function updateBird(id: string, formData: FormData) {
   'use server';
-  await prisma.bird.update({
-    where: { id },
-    data: {
-      name: String(formData.get('name') || '').trim() || 'Unnamed',
-      status: String(formData.get('status') || 'needs_intake'),
-      medicalPriority: String(formData.get('medicalPriority') || 'none'),
-      species: String(formData.get('species') || '') || null,
-      age: String(formData.get('age') || '') || null,
-      sex: String(formData.get('sex') || '') || null,
-      weightGrams: formData.get('weightGrams') ? Number(formData.get('weightGrams')) : null,
-      primaryDiagnosis: String(formData.get('primaryDiagnosis') || '') || null,
-      medicalNotes: String(formData.get('medicalNotes') || '') || null,
-      dietNotes: String(formData.get('dietNotes') || '') || null,
-      behaviorNotes: String(formData.get('behaviorNotes') || '') || null,
-      specialHandling: String(formData.get('specialHandling') || '') || null,
-      fosterId: String(formData.get('fosterId') || '') || null,
-    },
-  });
+  await requireOperator();
+  const data = parseForm(birdUpdateSchema, formData);
+  await prisma.bird.update({ where: { id }, data });
   redirect(`/birds/${id}`);
 }
 
 async function addCaseNote(id: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const body = String(formData.get('body') || '').trim();
   if (!body) return;
   await prisma.caseNote.create({
@@ -47,24 +38,28 @@ async function addCaseNote(id: string, formData: FormData) {
 
 async function archiveBird(id: string) {
   'use server';
+  await requireOperator();
   await prisma.bird.update({ where: { id }, data: { archivedAt: new Date(), deletedAt: null } });
   redirect(`/birds/${id}`);
 }
 
 async function softDeleteBird(id: string) {
   'use server';
+  await requireOperator();
   await prisma.bird.update({ where: { id }, data: { deletedAt: new Date() } });
   redirect('/archive');
 }
 
 async function restoreBird(id: string) {
   'use server';
+  await requireOperator();
   await prisma.bird.update({ where: { id }, data: { archivedAt: null, deletedAt: null } });
   redirect(`/birds/${id}`);
 }
 
 async function addMedication(id: string, formData: FormData) {
   'use server';
+  await requireOperator();
   const name = String(formData.get('name') || '').trim();
   if (!name) return;
   const days = formData.get('daysSupplied') ? Number(formData.get('daysSupplied')) : null;
@@ -82,22 +77,112 @@ async function addMedication(id: string, formData: FormData) {
   redirect(`/birds/${id}`);
 }
 
-export default async function BirdDetail({ params }: { params: Promise<{ id: string }> }) {
+async function uploadPhotos(id: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const category = String(formData.get('category') || 'general');
+  const allow = category === 'vet' ? 'any' : 'image';
+  const folder = category === 'health' ? 'health' : category === 'vet' ? 'vet' : 'birds';
+  const notes = String(formData.get('notes') || '') || null;
+  const caption = String(formData.get('caption') || '') || null;
+
+  const files = formData.getAll('files');
+  const saved = await saveUploads(files, folder, { allow });
+  if (saved.length === 0) {
+    redirect(`/birds/${id}`);
+  }
+  await prisma.$transaction(
+    saved.map(s => prisma.photo.create({
+      data: {
+        birdId: id,
+        url: s.url,
+        category,
+        kind: s.kind,
+        caption,
+        notes,
+        originalName: s.originalName,
+        mimeType: s.mimeType,
+      },
+    })),
+  );
+  redirect(`/birds/${id}`);
+}
+
+async function setProfilePhoto(id: string, photoId: string) {
+  'use server';
+  await requireOperator();
+  // Verify the photo belongs to the bird before mutating. Without this, a
+  // crafted form post could flip the profile flag on someone else's photo.
+  const photo = await prisma.photo.findUnique({ where: { id: photoId }, select: { birdId: true } });
+  if (!photo || photo.birdId !== id) {
+    redirect(`/birds/${id}`);
+  }
+  await prisma.$transaction([
+    prisma.photo.updateMany({ where: { birdId: id }, data: { isProfile: false } }),
+    prisma.photo.update({ where: { id: photoId }, data: { isProfile: true } }),
+  ]);
+  redirect(`/birds/${id}`);
+}
+
+async function deletePhoto(id: string, photoId: string) {
+  'use server';
+  await requireOperator();
+  const photo = await prisma.photo.findUnique({ where: { id: photoId } });
+  if (photo && photo.birdId === id) {
+    await deleteUpload(photo.url);
+    await prisma.photo.delete({ where: { id: photoId } });
+  }
+  redirect(`/birds/${id}`);
+}
+
+export default async function BirdDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ photo?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  const lightboxId = sp.photo || null;
   const bird = await prisma.bird.findUnique({
     where: { id },
     include: {
       foster: true,
       medications: { orderBy: { startDate: 'desc' } },
       placements: { include: { foster: true }, orderBy: { startDate: 'desc' } },
-      dailyUpdates: { orderBy: { createdAt: 'desc' }, take: 10, include: { foster: true } },
+      dailyUpdates: { orderBy: { createdAt: 'desc' }, take: 10, include: { foster: true, photos: true } },
       caseNotes: { orderBy: { createdAt: 'desc' } },
       vetVisits: { orderBy: { visitDate: 'desc' } },
       requests: { orderBy: { createdAt: 'desc' }, include: { foster: true } },
-      photos: { orderBy: { createdAt: 'desc' } },
+      photos: { orderBy: [{ isProfile: 'desc' }, { createdAt: 'desc' }] },
     },
   });
   if (!bird) notFound();
+
+  // Partition photos by category for the three gallery sections.
+  const generalPhotos = bird.photos.filter(p => p.category === 'general');
+  const healthPhotos  = bird.photos.filter(p => p.category === 'health');
+  const vetPhotos     = bird.photos.filter(p => p.category === 'vet');
+  const profilePhoto  = bird.photos.find(p => p.isProfile && p.kind === 'image') ?? null;
+
+  // Snapshot: upcoming events/transports/vet visits + meds needing refill.
+  const snapshot = await getBirdSnapshot(id);
+
+  // Lightbox setup: which photo is open, plus prev/next navigation within
+  // the same category (so arrows feel natural).
+  const lightboxPhoto = lightboxId ? bird.photos.find(p => p.id === lightboxId) ?? null : null;
+  let lightboxPrevId: string | null = null;
+  let lightboxNextId: string | null = null;
+  if (lightboxPhoto) {
+    const peers =
+      lightboxPhoto.category === 'health' ? healthPhotos
+      : lightboxPhoto.category === 'vet' ? vetPhotos
+      : generalPhotos;
+    const idx = peers.findIndex(p => p.id === lightboxPhoto.id);
+    if (idx > 0) lightboxPrevId = peers[idx - 1].id;
+    if (idx >= 0 && idx < peers.length - 1) lightboxNextId = peers[idx + 1].id;
+  }
 
   const isArchived = !!bird.archivedAt;
   const isDeleted = !!bird.deletedAt;
@@ -109,11 +194,70 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
   const archiveAction = archiveBird.bind(null, bird.id);
   const deleteAction = softDeleteBird.bind(null, bird.id);
   const restoreAction = restoreBird.bind(null, bird.id);
+  const photoUploadAction = uploadPhotos.bind(null, bird.id);
 
   return (
     <div className="space-y-4">
+      {lightboxPhoto && (
+        <PhotoLightbox
+          closeHref={`/birds/${bird.id}`}
+          imageUrl={lightboxPhoto.url}
+          alt={lightboxPhoto.caption ?? bird.name}
+          caption={lightboxPhoto.caption}
+          notes={lightboxPhoto.notes}
+          category={lightboxPhoto.category as 'general' | 'health' | 'vet'}
+          isProfile={lightboxPhoto.isProfile}
+          isImage={lightboxPhoto.kind === 'image'}
+          meta={{
+            createdAt: fmtDateTime(lightboxPhoto.createdAt),
+            mimeType: lightboxPhoto.mimeType,
+            originalName: lightboxPhoto.originalName,
+          }}
+          prevHref={lightboxPrevId ? `/birds/${bird.id}?photo=${lightboxPrevId}` : null}
+          nextHref={lightboxNextId ? `/birds/${bird.id}?photo=${lightboxNextId}` : null}
+          setProfileForm={
+            lightboxPhoto.kind === 'image' && !lightboxPhoto.isProfile ? (
+              <form action={async () => { 'use server'; await requireOperator(); await setProfilePhoto(bird.id, lightboxPhoto.id); }}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5"
+                >
+                  ★ Set as profile
+                </button>
+              </form>
+            ) : lightboxPhoto.isProfile ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-teal-50 text-teal-800 ring-1 ring-teal-200 text-xs font-medium px-3 py-1.5">
+                ★ Current profile
+              </span>
+            ) : null
+          }
+          deleteForm={
+            <form action={async () => { 'use server'; await requireOperator(); await deletePhoto(bird.id, lightboxPhoto.id); }}>
+              <button
+                type="submit"
+                className="text-xs text-red-600 hover:text-red-800 hover:underline"
+              >
+                Delete
+              </button>
+            </form>
+          }
+        />
+      )}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="flex items-start gap-4">
+          {profilePhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profilePhoto.url}
+              alt={bird.name}
+              className="h-20 w-20 rounded-2xl object-cover ring-2 ring-white shadow-md flex-shrink-0"
+            />
+          ) : (
+            <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-sky-400 to-sky-600 text-white flex items-center justify-center text-2xl font-bold flex-shrink-0">
+              🕊️
+            </div>
+          )}
+          <div>
           <Link href="/birds" className="text-sm text-teal-700 hover:underline">← Birds</Link>
           <div className="flex items-center gap-3 mt-1">
             <StatusDot tone={STATUS_TONE[bird.status] || 'gray'} size="lg" />
@@ -132,6 +276,7 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
             {bird.archivedAt && ` · archived ${fmtRelative(bird.archivedAt)}`}
             {bird.deletedAt && ` · deleted ${fmtRelative(bird.deletedAt)}`}
           </p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {(isArchived || isDeleted) ? (
@@ -150,6 +295,85 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
           )}
         </div>
       </div>
+
+      {/* Snapshot — upcoming care + meds to refill */}
+      <Card tone={(snapshot.upcoming.length || snapshot.refills.length) ? 'blue' : 'gray'}>
+        <div className="flex items-center justify-between mb-3">
+          <H2>Care snapshot</H2>
+          <span className="text-xs text-gray-500">next 30 days</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {/* Upcoming */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Upcoming</h3>
+              <Pill tone={snapshot.upcoming.length ? 'blue' : 'gray'}>{snapshot.upcoming.length}</Pill>
+            </div>
+            {snapshot.upcoming.length === 0 ? (
+              <p className="text-xs text-gray-500">Nothing scheduled.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {snapshot.upcoming.slice(0, 5).map(it => (
+                  <li key={`${it.kind}_${it.id}`} className="text-xs flex items-center gap-2">
+                    <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] flex-shrink-0 ${
+                      it.kind === 'transport' ? 'bg-orange-100 text-orange-800'
+                      : it.kind === 'vet' ? 'bg-sky-100 text-sky-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {it.kind === 'transport' ? '🚚' : it.kind === 'vet' ? '⚕️' : '📅'}
+                    </span>
+                    <Link href={it.href} className="flex-1 min-w-0 hover:underline">
+                      <span className="font-medium text-gray-800 truncate block">{it.title}</span>
+                      <span className="text-[10px] text-gray-500">{fmtDateTime(it.when)}{it.detail ? ` · ${it.detail}` : ''}</span>
+                    </Link>
+                  </li>
+                ))}
+                {snapshot.upcoming.length > 5 && (
+                  <li className="text-[11px] text-gray-500">+{snapshot.upcoming.length - 5} more</li>
+                )}
+              </ul>
+            )}
+          </div>
+          {/* Refills */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-700">Meds to refill</h3>
+              <Pill tone={snapshot.refills.some(r => r.daysUntil <= 0) ? 'red' : snapshot.refills.length ? 'yellow' : 'gray'}>
+                {snapshot.refills.length}
+              </Pill>
+            </div>
+            {snapshot.refills.length === 0 ? (
+              <p className="text-xs text-gray-500">No refills due.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {snapshot.refills.slice(0, 5).map(r => (
+                  <li key={r.id} className="text-xs flex items-center gap-2">
+                    <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] flex-shrink-0 ${
+                      r.daysUntil <= 0 ? 'bg-red-100 text-red-800'
+                      : r.daysUntil <= 3 ? 'bg-orange-100 text-orange-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                    }`}>💊</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 truncate">{r.name}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {r.daysUntil <= 0
+                          ? <span className="text-red-700 font-medium">overdue {-r.daysUntil}d</span>
+                          : r.daysUntil === 0 ? 'today'
+                          : r.daysUntil === 1 ? 'tomorrow'
+                          : `in ${r.daysUntil}d`}
+                        {' · runout '}{fmtDate(r.runout)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+                {snapshot.refills.length > 5 && (
+                  <li className="text-[11px] text-gray-500">+{snapshot.refills.length - 5} more</li>
+                )}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
@@ -269,6 +493,184 @@ export default async function BirdDetail({ params }: { params: Promise<{ id: str
                     </div>
                     {u.concerns && <div className="text-sm mt-1 text-orange-700">⚠ {u.concerns}</div>}
                     {u.notes && <div className="text-sm text-gray-600 mt-0.5">{u.notes}</div>}
+                    {u.photos && u.photos.length > 0 && (
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {u.photos.map(p => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer" className="block">
+                            <img
+                              src={p.url}
+                              alt={p.caption ?? 'daily update photo'}
+                              className="h-20 w-20 rounded-lg object-cover ring-1 ring-gray-200 hover:ring-teal-400 transition"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Photos gallery */}
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <H2>Photos</H2>
+              <Pill tone={generalPhotos.length ? 'blue' : 'gray'}>{generalPhotos.length}</Pill>
+            </div>
+            <details className="mb-3">
+              <summary className="cursor-pointer text-sm text-teal-700">+ Upload photos</summary>
+              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                <input type="hidden" name="category" value="general" />
+                <input
+                  type="file"
+                  name="files"
+                  accept="image/*"
+                  multiple
+                  required
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:text-teal-800 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-teal-100"
+                />
+                <input name="caption" placeholder="Caption (optional)" className={inputClass} />
+                <Btn type="submit" variant="primary">Upload</Btn>
+              </form>
+            </details>
+            {generalPhotos.length === 0 ? (
+              <Empty msg="No photos yet. Upload some above." />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {generalPhotos.map(p => (
+                  <div key={p.id} className="relative group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <Link href={`/birds/${bird.id}?photo=${p.id}`}>
+                      <img
+                        src={p.url}
+                        alt={p.caption ?? 'bird photo'}
+                        className={`w-full h-32 object-cover rounded-lg ring-1 transition cursor-zoom-in ${
+                          p.isProfile ? 'ring-2 ring-teal-500' : 'ring-gray-200 hover:ring-teal-400'
+                        }`}
+                      />
+                    </Link>
+                    {p.isProfile && (
+                      <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded-full bg-teal-600 text-white text-[10px] font-semibold px-2 py-0.5">★ profile</span>
+                    )}
+                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                      {!p.isProfile && (
+                        <form action={async () => { 'use server'; await requireOperator(); await setProfilePhoto(bird.id, p.id); }}>
+                          <button type="submit" title="Set as profile" className="h-6 w-6 rounded-full bg-white/90 text-teal-700 text-xs shadow ring-1 ring-gray-200 hover:bg-white">★</button>
+                        </form>
+                      )}
+                      <form action={async () => { 'use server'; await requireOperator(); await deletePhoto(bird.id, p.id); }}>
+                        <button type="submit" title="Delete" className="h-6 w-6 rounded-full bg-white/90 text-red-600 text-xs shadow ring-1 ring-gray-200 hover:bg-white">✕</button>
+                      </form>
+                    </div>
+                    {p.caption && <p className="mt-1 text-[10px] text-gray-600 line-clamp-2">{p.caption}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Health records */}
+          <Card tone={healthPhotos.length ? 'orange' : 'gray'}>
+            <div className="flex items-center justify-between mb-3">
+              <H2>Health records</H2>
+              <Pill tone={healthPhotos.length ? 'orange' : 'gray'}>{healthPhotos.length}</Pill>
+            </div>
+            <p className="text-xs text-gray-600 mb-3">Photos with medical significance — injuries, X-rays, wound progress — with notes.</p>
+            <details className="mb-3">
+              <summary className="cursor-pointer text-sm text-teal-700">+ Add health record</summary>
+              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                <input type="hidden" name="category" value="health" />
+                <input
+                  type="file"
+                  name="files"
+                  accept="image/*"
+                  multiple
+                  required
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-50 file:text-orange-800 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-orange-100"
+                />
+                <input name="caption" placeholder="Short caption (e.g. 'left foot, day 3')" className={inputClass} />
+                <textarea name="notes" rows={3} placeholder="Medical notes — what's significant about this image?" className={inputClass} />
+                <Btn type="submit" variant="primary">Add health record</Btn>
+              </form>
+            </details>
+            {healthPhotos.length === 0 ? (
+              <Empty msg="No health records yet." />
+            ) : (
+              <ul className="space-y-3">
+                {healthPhotos.map(p => (
+                  <li key={p.id} className="flex gap-3 rounded-lg ring-1 ring-orange-100 bg-orange-50/40 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <Link href={`/birds/${bird.id}?photo=${p.id}`} className="flex-shrink-0">
+                      <img src={p.url} alt={p.caption ?? 'health record'} className="h-24 w-24 object-cover rounded-md ring-1 ring-gray-200 hover:ring-teal-400 transition cursor-zoom-in" />
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-gray-500">{fmtDateTime(p.createdAt)}</div>
+                        <form action={async () => { 'use server'; await requireOperator(); await deletePhoto(bird.id, p.id); }}>
+                          <button type="submit" className="text-xs text-red-600 hover:underline">Delete</button>
+                        </form>
+                      </div>
+                      {p.caption && <div className="text-sm font-medium mt-0.5">{p.caption}</div>}
+                      {p.notes && <p className="text-xs text-gray-700 mt-1 whitespace-pre-wrap">{p.notes}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* Veterinary paperwork */}
+          <Card tone={vetPhotos.length ? 'blue' : 'gray'}>
+            <div className="flex items-center justify-between mb-3">
+              <H2>Veterinary paperwork</H2>
+              <Pill tone={vetPhotos.length ? 'blue' : 'gray'}>{vetPhotos.length}</Pill>
+            </div>
+            <p className="text-xs text-gray-600 mb-3">Documents and images from the vet — invoices, prescriptions, lab results, intake forms.</p>
+            <details className="mb-3">
+              <summary className="cursor-pointer text-sm text-teal-700">+ Upload document or image</summary>
+              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+                <input type="hidden" name="category" value="vet" />
+                <input
+                  type="file"
+                  name="files"
+                  accept="image/*,application/pdf,.doc,.docx,.txt"
+                  multiple
+                  required
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:text-sky-800 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-sky-100"
+                />
+                <input name="caption" placeholder="Title (e.g. 'Q1 invoice', 'X-ray report')" className={inputClass} />
+                <textarea name="notes" rows={2} placeholder="Notes (optional)" className={inputClass} />
+                <Btn type="submit" variant="primary">Upload</Btn>
+              </form>
+            </details>
+            {vetPhotos.length === 0 ? (
+              <Empty msg="No vet paperwork yet." />
+            ) : (
+              <ul className="space-y-2">
+                {vetPhotos.map(p => (
+                  <li key={p.id} className="flex items-center gap-3 rounded-lg ring-1 ring-sky-100 bg-sky-50/40 p-2">
+                    {p.kind === 'image' ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <Link href={`/birds/${bird.id}?photo=${p.id}`} className="flex-shrink-0">
+                        <img src={p.url} alt={p.caption ?? 'vet doc'} className="h-16 w-16 object-cover rounded-md ring-1 ring-gray-200 cursor-zoom-in" />
+                      </Link>
+                    ) : (
+                      <Link href={`/birds/${bird.id}?photo=${p.id}`} className="h-16 w-16 rounded-md bg-white ring-1 ring-gray-200 flex items-center justify-center text-2xl flex-shrink-0 cursor-pointer hover:ring-teal-400">📄</Link>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        <a href={p.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                          {p.caption || p.originalName || 'Document'}
+                        </a>
+                      </div>
+                      <div className="text-xs text-gray-500">{fmtDateTime(p.createdAt)}{p.mimeType ? ` · ${p.mimeType}` : ''}</div>
+                      {p.notes && <p className="text-xs text-gray-700 mt-0.5 line-clamp-2">{p.notes}</p>}
+                    </div>
+                    <form action={async () => { 'use server'; await requireOperator(); await deletePhoto(bird.id, p.id); }}>
+                      <button type="submit" className="text-xs text-red-600 hover:underline">Delete</button>
+                    </form>
                   </li>
                 ))}
               </ul>

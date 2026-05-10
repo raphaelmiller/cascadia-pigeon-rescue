@@ -3,11 +3,13 @@ import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
 import { BIRD_STATUSES, STATUS_LABELS, MEDICAL_PRIORITIES } from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
+import { requireOperator } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 async function createBird(formData: FormData) {
   'use server';
+  await requireOperator();
   const name = String(formData.get('name') || '').trim() || 'Unnamed';
   const status = String(formData.get('status') || 'needs_intake');
   const medicalPriority = String(formData.get('medicalPriority') || 'none');

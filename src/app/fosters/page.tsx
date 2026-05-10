@@ -87,6 +87,14 @@ export default async function FostersPage({
                 <Link href={`/fosters/${f.id}`} className="block">
                   <Card tone={tone} className="hover:shadow-md transition cursor-pointer h-full">
                     <div className="flex items-start gap-3">
+                      {f.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={f.photoUrl} alt={f.name} className="h-12 w-12 rounded-full object-cover ring-1 ring-gray-200 flex-shrink-0" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-teal-300 to-teal-500 text-white flex items-center justify-center text-base font-bold flex-shrink-0">
+                          {f.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <StatusDot tone={tone} size="lg" />
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold truncate">{f.name}</h3>
@@ -96,7 +104,7 @@ export default async function FostersPage({
                     </div>
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-gray-500">Clinical</span>
+                        <span className="text-gray-500">Care</span>
                         <span className="tabular-nums font-semibold text-gray-700">
                           {clinicalScore(f as unknown as Record<string, unknown>)}
                           <span className="text-gray-400 font-normal ml-1">{clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}</span>

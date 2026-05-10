@@ -5,6 +5,7 @@ import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES } from '@/lib/
 import { fmtDate } from '@/lib/utils';
 import { activeBirdWhere } from '@/lib/filters';
 import { SwipeRow } from '@/components/SwipeRow';
+import { getBirdsSnapshots } from '@/lib/birdSnapshot';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,9 +29,15 @@ export default async function BirdsPage({
 
   const birds = await prisma.bird.findMany({
     where,
-    include: { foster: true },
+    include: {
+      foster: true,
+      photos: { where: { isProfile: true, kind: 'image' }, take: 1 },
+    },
     orderBy: { intakeDate: 'desc' },
   });
+
+  // Batch-fetch snapshots so each card can show upcoming + refills.
+  const snapshots = await getBirdsSnapshots(birds.map(b => b.id));
 
   return (
     <div className="space-y-4">
@@ -72,49 +79,99 @@ export default async function BirdsPage({
         <Empty msg="No birds match. Try different filters or +New intake." />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {birds.map(b => (
-            <SwipeRow
-              key={b.id}
-              archiveUrl={`/api/birds/${b.id}/archive`}
-              deleteUrl={`/api/birds/${b.id}/delete`}
-              entityName={b.name}
-              className="rounded-2xl"
-            >
-              <Link href={`/birds/${b.id}`} className="block">
-                <Card className="hover:shadow-md transition cursor-pointer h-full">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <StatusDot tone={STATUS_TONE[b.status] || 'gray'} />
-                        <h3 className="font-semibold truncate">{b.name}</h3>
+          {birds.map(b => {
+            const profile = b.photos[0]?.url ?? null;
+            const snap = snapshots.get(b.id) ?? { upcoming: [], refills: [] };
+            const overdueRefills = snap.refills.filter(r => r.daysUntil <= 0).length;
+            return (
+              <SwipeRow
+                key={b.id}
+                archiveUrl={`/api/birds/${b.id}/archive`}
+                deleteUrl={`/api/birds/${b.id}/delete`}
+                entityName={b.name}
+                className="rounded-2xl"
+              >
+                <Link href={`/birds/${b.id}`} className="block">
+                  <Card className="hover:shadow-md transition cursor-pointer h-full">
+                    <div className="flex items-start gap-3">
+                      {profile ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={profile} alt={b.name} className="h-14 w-14 rounded-xl object-cover ring-1 ring-gray-200 flex-shrink-0" />
+                      ) : (
+                        <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-sky-200 to-sky-400 text-white flex items-center justify-center text-xl flex-shrink-0">🕊️</div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <StatusDot tone={STATUS_TONE[b.status] || 'gray'} />
+                              <h3 className="font-semibold truncate">{b.name}</h3>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">{b.species || 'pigeon'} · {b.age || 'age unknown'}</p>
+                          </div>
+                          {b.medicalPriority !== 'none' && (
+                            <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{b.species || 'pigeon'} · {b.age || 'age unknown'}</p>
                     </div>
-                    {b.medicalPriority !== 'none' && (
-                      <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
+                    <div className="mt-3 space-y-1 text-xs">
+                      <div className="flex justify-between text-gray-600">
+                        <span>Status</span>
+                        <span className="font-medium text-gray-800">{STATUS_LABELS[b.status]}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>Foster</span>
+                        <span className="font-medium text-gray-800 truncate">{b.foster?.name || '—'}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>Intake</span>
+                        <span className="font-medium text-gray-800">{fmtDate(b.intakeDate)}</span>
+                      </div>
+                      {b.primaryDiagnosis && (
+                        <div className="text-gray-600 mt-1.5 line-clamp-2">{b.primaryDiagnosis}</div>
+                      )}
+                    </div>
+                    {(snap.upcoming.length > 0 || snap.refills.length > 0) && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <div className="flex items-center gap-1 text-gray-500 uppercase tracking-wide font-semibold">
+                            📅 Upcoming
+                            {snap.upcoming.length > 0 && <Pill tone="blue">{snap.upcoming.length}</Pill>}
+                          </div>
+                          {snap.upcoming.slice(0, 2).map(it => (
+                            <div key={`${it.kind}_${it.id}`} className="truncate text-gray-700 mt-0.5">
+                              <span className="text-gray-400">{fmtDate(it.when)}</span>{' '}
+                              <span>{it.kind === 'transport' ? '🚚' : it.kind === 'vet' ? '⚕️' : '•'}</span>{' '}
+                              <span className="truncate">{it.title}</span>
+                            </div>
+                          ))}
+                          {snap.upcoming.length === 0 && <div className="text-gray-400 mt-0.5">none</div>}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1 text-gray-500 uppercase tracking-wide font-semibold">
+                            💊 Refills
+                            {snap.refills.length > 0 && (
+                              <Pill tone={overdueRefills ? 'red' : 'yellow'}>{snap.refills.length}</Pill>
+                            )}
+                          </div>
+                          {snap.refills.slice(0, 2).map(r => (
+                            <div key={r.id} className="truncate text-gray-700 mt-0.5">
+                              <span className={r.daysUntil <= 0 ? 'text-red-700 font-medium' : 'text-gray-400'}>
+                                {r.daysUntil <= 0 ? `${-r.daysUntil}d overdue` : `in ${r.daysUntil}d`}
+                              </span>{' '}
+                              <span className="truncate">{r.name}</span>
+                            </div>
+                          ))}
+                          {snap.refills.length === 0 && <div className="text-gray-400 mt-0.5">none</div>}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <div className="mt-3 space-y-1 text-xs">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Status</span>
-                      <span className="font-medium text-gray-800">{STATUS_LABELS[b.status]}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Foster</span>
-                      <span className="font-medium text-gray-800 truncate">{b.foster?.name || '—'}</span>
-                    </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Intake</span>
-                      <span className="font-medium text-gray-800">{fmtDate(b.intakeDate)}</span>
-                    </div>
-                    {b.primaryDiagnosis && (
-                      <div className="text-gray-600 mt-1.5 line-clamp-2">{b.primaryDiagnosis}</div>
-                    )}
-                  </div>
-                </Card>
-              </Link>
-            </SwipeRow>
-          ))}
+                  </Card>
+                </Link>
+              </SwipeRow>
+            );
+          })}
         </div>
       )}
     </div>
