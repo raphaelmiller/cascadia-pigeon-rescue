@@ -54,6 +54,7 @@ model Bird {
   vetVisits  VetVisit[]
   caseNotes  CaseNote[]
   bandageTasks BandageTask[]
+  transports TransportRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -68,9 +69,9 @@ model Foster {
   phone           String?
   email           String?
   address         String?
+  photoUrl        String?  // profile photo (path under /uploads/fosters/...)
   capacity        Int      @default(0)
   medicalSkill    String   @default("beginner") // rehab proficiency: beginner / intermediate / advanced
-  preferredTypes  String?
   longTermAble    Boolean  @default(false)
   notes           String?
 
@@ -93,6 +94,7 @@ model Foster {
   skillIMInjections     Boolean @default(false)
   skillCompoundMeds     Boolean @default(false)
   skillCropSwabsFecals  Boolean @default(false)
+  skillCropFlushes      Boolean @default(false)
   skillCageTime         Boolean @default(false)
   skillBirdLights       Boolean @default(false)
   skillSupplements      Boolean @default(false)
@@ -227,6 +229,8 @@ model DailyUpdate {
   whiteboardUpdate String?
   notes         String?
 
+  photos        DailyUpdatePhoto[]
+
   createdAt DateTime @default(now())
 }
 
@@ -234,12 +238,36 @@ model DailyUpdate {
 // PHOTOS
 // ========================================================================
 model Photo {
-  id      String  @id @default(cuid())
-  birdId  String
-  bird    Bird    @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  url     String
-  caption String?
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  birdId       String
+  bird         Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  url          String
+  caption      String?
+  // Categorization: general gallery, health record, vet paperwork
+  category     String   @default("general")  // general | health | vet
+  // Treats this as the bird's profile photo when true (one per bird)
+  isProfile    Boolean  @default(false)
+  // Optional notes (used heavily by health + vet entries)
+  notes        String?
+  // Original file metadata
+  originalName String?
+  mimeType     String?
+  // Marker for uploads that aren't images (e.g. PDFs in vet paperwork)
+  kind         String   @default("image")    // image | document
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Photos attached to a daily update (separate from the bird's main gallery).
+model DailyUpdatePhoto {
+  id            String      @id @default(cuid())
+  dailyUpdateId String
+  dailyUpdate   DailyUpdate @relation(fields: [dailyUpdateId], references: [id], onDelete: Cascade)
+  url           String
+  caption       String?
+  originalName  String?
+  mimeType      String?
+  createdAt     DateTime    @default(now())
 }
 
 // ========================================================================
@@ -320,6 +348,7 @@ model TransportVolunteer {
 model TransportRequest {
   id           String   @id @default(cuid())
   birdId       String?
+  bird         Bird?    @relation(fields: [birdId], references: [id], onDelete: SetNull)
   fromAddress  String
   toAddress    String
   pickupBy     DateTime
