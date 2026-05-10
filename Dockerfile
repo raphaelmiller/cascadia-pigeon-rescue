@@ -63,6 +63,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next              ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma             ./prisma
 
+# Migration runner for libSQL/Turso (invoked by `prod:start`).
+COPY --from=builder --chown=nextjs:nodejs /app/scripts            ./scripts
+
 # next.config.ts is referenced by `next start` at boot.
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
 

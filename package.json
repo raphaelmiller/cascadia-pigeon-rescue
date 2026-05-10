@@ -11,7 +11,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.mjs",
     "db:studio": "prisma studio",
-    "prod:start": "prisma migrate deploy && next start"
+    "prod:start": "node scripts/migrate-libsql.mjs && next start"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
