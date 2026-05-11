@@ -4,6 +4,8 @@ import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
 import { BIRD_STATUSES, STATUS_LABELS, MEDICAL_PRIORITIES } from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
 import { requireOperator } from '@/lib/auth';
+import { PartialDatePicker } from '@/components/PartialDatePicker';
+import { readPartialDate } from '@/lib/partialDate';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +17,11 @@ async function createBird(formData: FormData) {
   const medicalPriority = String(formData.get('medicalPriority') || 'none');
   const fosterId = String(formData.get('fosterId') || '') || null;
 
+  const foundDate = readPartialDate(formData, 'foundDate');
+  const initialWeight = formData.get('weightGrams')
+    ? Number(formData.get('weightGrams'))
+    : null;
+
   const bird = await prisma.bird.create({
     data: {
       name,
@@ -22,8 +29,11 @@ async function createBird(formData: FormData) {
       breed: String(formData.get('breed') || '') || null,
       age: String(formData.get('age') || '') || null,
       sex: String(formData.get('sex') || '') || null,
-      weightGrams: formData.get('weightGrams') ? Number(formData.get('weightGrams')) : null,
+      weightGrams: initialWeight,
       bandInfo: String(formData.get('bandInfo') || '') || null,
+      foundDateYear: foundDate.year,
+      foundDateMonth: foundDate.month,
+      foundDateDay: foundDate.day,
       foundLocation: String(formData.get('foundLocation') || '') || null,
       finderName: String(formData.get('finderName') || '') || null,
       finderContact: String(formData.get('finderContact') || '') || null,
@@ -38,6 +48,19 @@ async function createBird(formData: FormData) {
       fosterId: fosterId || undefined,
     },
   });
+
+  // Seed the weight log with the intake reading so the new log feature
+  // doesn't start out empty for birds that have a known intake weight.
+  if (initialWeight !== null && !Number.isNaN(initialWeight)) {
+    await prisma.weightEntry.create({
+      data: {
+        birdId: bird.id,
+        grams: initialWeight,
+        notes: 'intake',
+      },
+    });
+  }
+
   redirect(`/birds/${bird.id}`);
 }
 
@@ -87,6 +110,12 @@ export default async function NewBirdPage() {
         <Card>
           <h3 className="font-semibold mb-3">Where found / who found</h3>
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Date found" className="sm:col-span-2">
+              <PartialDatePicker name="foundDate" />
+              <p className="text-xs text-gray-500 mt-1">
+                Year is enough. Add month and day only if you know them.
+              </p>
+            </Field>
             <Field label="Found location" className="sm:col-span-2">
               <input name="foundLocation" className={inputClass} />
             </Field>

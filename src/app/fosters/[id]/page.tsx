@@ -13,6 +13,8 @@ import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { saveUpload, deleteUpload } from '@/lib/uploads';
 import { requireOperator } from '@/lib/auth';
 import { parseForm, fosterUpdateSchema } from '@/lib/schemas';
+import { PartialDatePicker } from '@/components/PartialDatePicker';
+import { formatPartialDate } from '@/lib/partialDate';
 
 export const dynamic = 'force-dynamic';
 
@@ -357,6 +359,21 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
           <Field label="Phone"><input name="phone" defaultValue={f.phone ?? ''} className={inputClass} /></Field>
           <Field label="Email"><input name="email" defaultValue={f.email ?? ''} className={inputClass} /></Field>
           <Field label="Address"><input name="address" defaultValue={f.address ?? ''} className={inputClass} /></Field>
+          <Field label="Date joined" className="sm:col-span-2">
+            <PartialDatePicker
+              name="joinedDate"
+              defaultValue={{
+                year: f.joinedDateYear,
+                month: f.joinedDateMonth,
+                day: f.joinedDateDay,
+              }}
+            />
+            {formatPartialDate(f.joinedDateYear, f.joinedDateMonth, f.joinedDateDay) && (
+              <p className="text-xs text-gray-500 mt-1">
+                Currently: {formatPartialDate(f.joinedDateYear, f.joinedDateMonth, f.joinedDateDay)}
+              </p>
+            )}
+          </Field>
           <Field label="Capacity"><input type="number" name="capacity" defaultValue={f.capacity} className={inputClass} /></Field>
           <Field label="Rehab proficiency">
             <select name="medicalSkill" defaultValue={REHAB_PROFICIENCY.includes(f.medicalSkill as never) ? f.medicalSkill : 'beginner'} className={inputClass}>

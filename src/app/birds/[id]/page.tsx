@@ -10,6 +10,9 @@ import { getBirdSnapshot } from '@/lib/birdSnapshot';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
 import { requireOperator } from '@/lib/auth';
 import { parseForm, birdUpdateSchema } from '@/lib/schemas';
+import { PartialDatePicker } from '@/components/PartialDatePicker';
+import { formatPartialDate } from '@/lib/partialDate';
+import { WeightLog } from '@/components/WeightLog';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +22,49 @@ async function updateBird(id: string, formData: FormData) {
   const data = parseForm(birdUpdateSchema, formData);
   await prisma.bird.update({ where: { id }, data });
   redirect(`/birds/${id}`);
+}
+
+async function addWeightEntry(id: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const grams = Number(formData.get('grams'));
+  if (!Number.isFinite(grams) || grams <= 0 || grams > 5000) return;
+  const dateStr = String(formData.get('measuredAt') || '');
+  // Local-midnight to avoid the "clicked May 10, saved as May 9" UTC issue.
+  const measuredAt = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
+  const notes = String(formData.get('notes') || '').trim() || null;
+  await prisma.weightEntry.create({
+    data: { birdId: id, grams, measuredAt, notes },
+  });
+  // Mirror the latest reading onto Bird.weightGrams so list/dashboard
+  // views that read the cached value keep working without a join.
+  await refreshWeightCache(id);
+  redirect(`/birds/${id}`);
+}
+
+async function deleteWeightEntry(id: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const entryId = String(formData.get('id') || '');
+  if (!entryId) return;
+  await prisma.weightEntry.deleteMany({ where: { id: entryId, birdId: id } });
+  await refreshWeightCache(id);
+  redirect(`/birds/${id}`);
+}
+
+/**
+ * Recompute Bird.weightGrams from the latest WeightEntry row. Called
+ * after every add / delete so the cached "current weight" never lies.
+ */
+async function refreshWeightCache(birdId: string) {
+  const latest = await prisma.weightEntry.findFirst({
+    where: { birdId },
+    orderBy: [{ measuredAt: 'desc' }, { createdAt: 'desc' }],
+  });
+  await prisma.bird.update({
+    where: { id: birdId },
+    data: { weightGrams: latest ? latest.grams : null },
+  });
 }
 
 async function addCaseNote(id: string, formData: FormData) {
@@ -156,6 +202,7 @@ export default async function BirdDetail({
       vetVisits: { orderBy: { visitDate: 'desc' } },
       requests: { orderBy: { createdAt: 'desc' }, include: { foster: true } },
       photos: { orderBy: [{ isProfile: 'desc' }, { createdAt: 'desc' }] },
+      weightLog: { orderBy: [{ measuredAt: 'desc' }, { createdAt: 'desc' }] },
     },
   });
   if (!bird) notFound();
@@ -191,6 +238,13 @@ export default async function BirdDetail({
   const updateAction = updateBird.bind(null, bird.id);
   const noteAction = addCaseNote.bind(null, bird.id);
   const medAction = addMedication.bind(null, bird.id);
+  const weightAddAction = addWeightEntry.bind(null, bird.id);
+  const weightDeleteAction = deleteWeightEntry.bind(null, bird.id);
+  const foundDateStr = formatPartialDate(
+    bird.foundDateYear,
+    bird.foundDateMonth,
+    bird.foundDateDay,
+  );
   const archiveAction = archiveBird.bind(null, bird.id);
   const deleteAction = softDeleteBird.bind(null, bird.id);
   const restoreAction = restoreBird.bind(null, bird.id);
@@ -402,8 +456,30 @@ export default async function BirdDetail({
                   <option value="F">Female</option>
                 </select>
               </Field>
-              <Field label="Weight (g)">
-                <input type="number" step="0.1" name="weightGrams" defaultValue={bird.weightGrams ?? ''} className={inputClass} />
+              <Field label="Current weight">
+                <div className="flex items-center h-[38px] px-3 text-sm text-gray-700">
+                  {bird.weightGrams != null ? (
+                    <span>
+                      <span className="font-medium">{bird.weightGrams.toFixed(1)} g</span>
+                      <span className="text-xs text-gray-500 ml-2">(from log)</span>
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">No weight logged yet</span>
+                  )}
+                </div>
+              </Field>
+              <Field label="Date found" className="sm:col-span-2">
+                <PartialDatePicker
+                  name="foundDate"
+                  defaultValue={{
+                    year: bird.foundDateYear,
+                    month: bird.foundDateMonth,
+                    day: bird.foundDateDay,
+                  }}
+                />
+                {foundDateStr && (
+                  <p className="text-xs text-gray-500 mt-1">Currently: {foundDateStr}</p>
+                )}
               </Field>
               <Field label="Medical priority">
                 <select name="medicalPriority" defaultValue={bird.medicalPriority} className={inputClass}>
@@ -435,6 +511,23 @@ export default async function BirdDetail({
                 <Btn type="submit" variant="primary">Save changes</Btn>
               </div>
             </form>
+          </Card>
+
+          {/* Weight log */}
+          <Card>
+            <div className="flex items-center justify-between">
+              <H2>Weight log</H2>
+              {bird.weightGrams != null && (
+                <span className="text-xs text-gray-500">
+                  Latest: <strong className="text-gray-700">{bird.weightGrams.toFixed(1)} g</strong>
+                </span>
+              )}
+            </div>
+            <WeightLog
+              entries={bird.weightLog}
+              addAction={weightAddAction}
+              deleteAction={weightDeleteAction}
+            />
           </Card>
 
           {/* Medications */}

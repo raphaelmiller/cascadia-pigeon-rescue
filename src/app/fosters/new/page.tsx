@@ -5,6 +5,8 @@ import { REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, ALL_SKILL_KEYS } from '@/li
 import { SkillAssessment } from '@/components/SkillAssessment';
 import { saveUpload } from '@/lib/uploads';
 import { requireOperator } from '@/lib/auth';
+import { PartialDatePicker } from '@/components/PartialDatePicker';
+import { readPartialDate } from '@/lib/partialDate';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,8 @@ async function createFoster(formData: FormData) {
     if (saved) photoUrl = saved.url;
   }
 
+  const joined = readPartialDate(formData, 'joinedDate');
+
   const f = await prisma.foster.create({
     data: {
       photoUrl,
@@ -34,6 +38,9 @@ async function createFoster(formData: FormData) {
       longTermAble: formData.get('longTermAble') === 'on',
       canTransportSelf: formData.get('canTransportSelf') === 'on',
       notes: String(formData.get('notes') || '') || null,
+      joinedDateYear: joined.year,
+      joinedDateMonth: joined.month,
+      joinedDateDay: joined.day,
       ...skillData,
     },
   });
@@ -72,6 +79,12 @@ export default function NewFosterPage() {
             </Field>
             <Field label="Address / location">
               <input name="address" className={inputClass} />
+            </Field>
+            <Field label="Date joined" className="sm:col-span-2">
+              <PartialDatePicker name="joinedDate" />
+              <p className="text-xs text-gray-500 mt-1">
+                Year is enough. Add month and day only if you know them.
+              </p>
             </Field>
           </div>
         </Card>
