@@ -22,6 +22,12 @@ model Bird {
   weightGrams     Float?
   bandInfo        String?
   intakeDate      DateTime @default(now())
+  // Date the bird was found (separate from intake). Partial-date triple:
+  // Year required, Month + Day optional, so callers can say
+  // "2024" or "March 2024" or "March 15, 2024".
+  foundDateYear   Int?
+  foundDateMonth  Int?  // 1..12 when present
+  foundDateDay    Int?  // 1..31 when present
   foundLocation   String?
   finderName      String?
   finderContact   String?
@@ -55,6 +61,7 @@ model Bird {
   caseNotes  CaseNote[]
   bandageTasks BandageTask[]
   transports TransportRequest[]
+  weightLog  WeightEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -72,6 +79,11 @@ model Foster {
   photoUrl        String?  // profile photo (path under /uploads/fosters/...)
   capacity        Int      @default(0)
   medicalSkill    String   @default("beginner") // rehab proficiency: beginner / intermediate / advanced
+  // Date this foster joined the rescue. Partial-date triple
+  // (year required, month + day optional). See Bird.foundDate*.
+  joinedDateYear  Int?
+  joinedDateMonth Int?  // 1..12 when present
+  joinedDateDay   Int?  // 1..31 when present
   longTermAble    Boolean  @default(false)
   notes           String?
 
@@ -170,6 +182,24 @@ model Medication {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// WEIGHT LOG (ongoing weight entries per bird)
+// ========================================================================
+// Replaces the single Bird.weightGrams field as the source of truth.
+// Bird.weightGrams is kept as a denormalised "latest weight" cache so
+// existing list views and dashboards keep working without a join.
+model WeightEntry {
+  id          String   @id @default(cuid())
+  birdId      String
+  bird        Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  grams       Float
+  measuredAt  DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([birdId, measuredAt])
 }
 
 // ========================================================================

@@ -3,6 +3,7 @@ import {
   BIRD_STATUSES, MEDICAL_PRIORITIES, REQUEST_URGENCIES, CALENDAR_TYPES,
   REHAB_PROFICIENCY, TRANSPORT_STATUSES, SHIFT_TYPES,
 } from '@/lib/constants';
+import { daysInMonth } from '@/lib/partialDate';
 
 /**
  * Centralised input validators. Each server action calls one of these
@@ -20,6 +21,43 @@ const trimmedString = z.string().trim();
 const optionalString = trimmedString.optional().transform(v => (v && v.length > 0 ? v : null));
 const optionalIso = z.string().optional().transform(v => (v ? new Date(v) : null));
 
+/**
+ * Coerce a stringy form value to an integer in [min, max], or null if it's
+ * blank / out of range. Used by the partial-date triple fields.
+ */
+const optionalIntIn = (min: number, max: number) =>
+  z.preprocess(
+    v => (v === '' || v === null || v === undefined ? null : Number(v)),
+    z.number().int().min(min).max(max).nullable(),
+  );
+
+// Partial date columns. Pass these as a spread to extend any schema that
+// needs them, with the chosen prefix for the form names.
+function partialDateFields(prefix: string) {
+  return {
+    [`${prefix}Year`]: optionalIntIn(1900, 2100),
+    [`${prefix}Month`]: optionalIntIn(1, 12),
+    [`${prefix}Day`]: optionalIntIn(1, 31),
+  } as const;
+}
+
+/**
+ * Post-validation sanity pass for partial dates:
+ *   - month/day are dropped if year is missing
+ *   - day is dropped if month is missing
+ *   - day is clamped to the actual length of the selected month
+ */
+export function normalizePartialDate(
+  year: number | null,
+  month: number | null,
+  day: number | null,
+): { year: number | null; month: number | null; day: number | null } {
+  if (year === null) return { year: null, month: null, day: null };
+  if (month === null) return { year, month: null, day: null };
+  const cap = daysInMonth(year, month);
+  return { year, month, day: day && day <= cap ? day : null };
+}
+
 // ---------------------------------------------------------------------
 // Bird
 // ---------------------------------------------------------------------
@@ -31,14 +69,23 @@ export const birdUpdateSchema = z.object({
   age: optionalString,
   sex: z.enum(['M', 'F']).optional().or(z.literal('').transform(() => undefined))
     .transform(v => (v ? v : null)),
-  weightGrams: z.coerce.number().positive().max(5000).nullable().optional()
-    .transform(v => (typeof v === 'number' && !isNaN(v) ? v : null)),
+  // weightGrams is NOT in this schema on purpose: it is now a denormalised
+  // cache of the latest WeightEntry, refreshed by add/delete actions on
+  // the weight log. The edit form must not overwrite it.
   primaryDiagnosis: optionalString,
   medicalNotes: optionalString,
   dietNotes: optionalString,
   behaviorNotes: optionalString,
   specialHandling: optionalString,
   fosterId: optionalString,
+  ...partialDateFields('foundDate'),
+});
+
+// One ongoing weight reading on a bird.
+export const weightEntrySchema = z.object({
+  grams: z.coerce.number().positive().max(5000),
+  measuredAt: z.string().min(1).transform(v => new Date(v)),
+  notes: optionalString,
 });
 
 // ---------------------------------------------------------------------
@@ -54,6 +101,7 @@ export const fosterUpdateSchema = z.object({
   longTermAble: z.preprocess(v => v === 'on' || v === true || v === 'true', z.boolean()),
   canTransportSelf: z.preprocess(v => v === 'on' || v === true || v === 'true', z.boolean()),
   notes: optionalString,
+  ...partialDateFields('joinedDate'),
 });
 
 // ---------------------------------------------------------------------
