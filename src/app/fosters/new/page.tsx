@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { H1, Card, Field, Btn, inputClass } from '@/components/ui';
-import { REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL, ALL_SKILL_KEYS } from '@/lib/constants';
+import { ALL_SKILL_KEYS } from '@/lib/constants';
 import { SkillAssessment } from '@/components/SkillAssessment';
 import { saveUpload } from '@/lib/uploads';
 import { requireOperator } from '@/lib/auth';
@@ -34,7 +34,9 @@ async function createFoster(formData: FormData) {
       email: String(formData.get('email') || '') || null,
       address: String(formData.get('address') || '') || null,
       capacity: Number(formData.get('capacity') || 0),
-      medicalSkill: String(formData.get('medicalSkill') || 'beginner'),
+      // medicalSkill (rehab proficiency) was removed from the UI 2026-05-17.
+      // New fosters get the schema default ('beginner'); the column is
+      // retained for historical data only and surfaced nowhere in the UI.
       longTermAble: formData.get('longTermAble') === 'on',
       canTransportSelf: formData.get('canTransportSelf') === 'on',
       notes: String(formData.get('notes') || '') || null,
@@ -93,14 +95,15 @@ export default function NewFosterPage() {
         <Card>
           <h3 className="font-semibold mb-3">Capacity & profile</h3>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Capacity (max birds)">
+            <Field label="Capacity (max birds)" className="sm:col-span-2">
               <input type="number" name="capacity" defaultValue={2} className={inputClass} />
             </Field>
-            <Field label="Rehab proficiency">
-              <select name="medicalSkill" defaultValue="beginner" className={inputClass}>
-                {REHAB_PROFICIENCY.map(s => (<option key={s} value={s}>{REHAB_PROFICIENCY_LABEL[s]}</option>))}
-              </select>
-            </Field>
+            {/*
+              Rehab proficiency dropdown removed 2026-05-17 — the Skill &
+              Care Assessment section below already covers this with finer
+              granularity. The underlying `medicalSkill` column is retained
+              in the schema so historical data is preserved.
+            */}
             <label className="flex items-center gap-2 text-sm sm:col-span-2">
               <input type="checkbox" name="longTermAble" className="h-4 w-4 rounded border-gray-300" />
               Available for long-term foster

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
 import {
-  stressLabel, stressTone, REHAB_PROFICIENCY, REHAB_PROFICIENCY_LABEL,
+  stressLabel, stressTone,
   ALL_SKILL_KEYS, SKILL_TIERS, MAX_CLINICAL, MAX_QUALITY,
   clinicalScore, qualityScore, clinicalCategory, clinicalCategoryTone,
   qualityCategory, qualityCategoryTone,
@@ -374,14 +374,13 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
               </p>
             )}
           </Field>
-          <Field label="Capacity"><input type="number" name="capacity" defaultValue={f.capacity} className={inputClass} /></Field>
-          <Field label="Rehab proficiency">
-            <select name="medicalSkill" defaultValue={REHAB_PROFICIENCY.includes(f.medicalSkill as never) ? f.medicalSkill : 'beginner'} className={inputClass}>
-              {REHAB_PROFICIENCY.map(s => (
-                <option key={s} value={s}>{REHAB_PROFICIENCY_LABEL[s]}</option>
-              ))}
-            </select>
-          </Field>
+          <Field label="Capacity" className="sm:col-span-2"><input type="number" name="capacity" defaultValue={f.capacity} className={inputClass} /></Field>
+          {/*
+            Rehab proficiency dropdown removed 2026-05-17 — the Skill & Care
+            Assessment section below already covers this with finer granularity.
+            The underlying `medicalSkill` column is intentionally retained
+            in the schema so historical data is preserved.
+          */}
           <div className="sm:col-span-2">
             <CheckRow name="longTermAble" label="Available for long-term foster" defaultChecked={f.longTermAble} />
           </div>

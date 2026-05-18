@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   BIRD_STATUSES, MEDICAL_PRIORITIES, REQUEST_URGENCIES, CALENDAR_TYPES,
-  REHAB_PROFICIENCY, TRANSPORT_STATUSES, SHIFT_TYPES,
+  TRANSPORT_STATUSES, SHIFT_TYPES,
 } from '@/lib/constants';
 import { daysInMonth } from '@/lib/partialDate';
 
@@ -97,7 +97,10 @@ export const fosterUpdateSchema = z.object({
   email: optionalString,
   address: optionalString,
   capacity: z.coerce.number().int().min(0).max(50).default(0),
-  medicalSkill: z.enum(REHAB_PROFICIENCY as unknown as [string, ...string[]]),
+  // medicalSkill (rehab proficiency) was removed from the UI 2026-05-17.
+  // The DB column is retained for historical data; if the form does not
+  // submit it, the existing value stays untouched (omitted from the
+  // Prisma update payload).
   longTermAble: z.preprocess(v => v === 'on' || v === true || v === 'true', z.boolean()),
   canTransportSelf: z.preprocess(v => v === 'on' || v === true || v === 'true', z.boolean()),
   notes: optionalString,
