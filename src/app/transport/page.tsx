@@ -183,7 +183,7 @@ export default async function TransportPage({
                 <option value="">— leave open —</option>
                 {volunteers.map(v => (
                   <option key={v.id} value={v.id}>
-                    {v.name}{v.medicalCapable ? ' · 🩺' : ''}
+                    {v.name}
                   </option>
                 ))}
               </select>
@@ -233,7 +233,7 @@ export default async function TransportPage({
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="font-semibold">{v.name}</div>
                     {v.linkedFoster && <Pill tone="purple">also a foster</Pill>}
-                    {v.medicalCapable && <Pill tone="blue">🩺 medical</Pill>}
+                    {/* 🩺 medical pill removed 2026-05-17; column retained for legacy data. */}
                     {v._count.requests > 0 && (
                       <Pill tone={v._count.requests >= 3 ? 'orange' : 'green'}>{v._count.requests} active</Pill>
                     )}
@@ -272,10 +272,11 @@ export default async function TransportPage({
               <input name="availability" placeholder="weekends / evenings / on-call" className={inputClass} />
             </Field>
             {/*
-              "Comfortable transporting medical birds" checkbox removed
-              2026-05-17. The underlying `medicalCapable` column is
-              retained in the schema so historical data is preserved;
-              new drivers default to false.
+              "Comfortable transporting medical birds" checkbox + 🩺 pill
+              both removed 2026-05-17. The underlying `medicalCapable`
+              column is retained in the schema so historical data is
+              preserved; new drivers default to false. UI no longer
+              surfaces this field.
             */}
             <Field label="Notes" className="sm:col-span-2">
               <textarea name="notes" rows={2} className={inputClass} />

@@ -70,7 +70,7 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
           <H1>{driver.name}</H1>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {driver.linkedFoster && <Pill tone="purple">also a foster</Pill>}
-            {driver.medicalCapable && <Pill tone="blue">🩺 medical capable</Pill>}
+            {/* 🩺 medical capable pill removed 2026-05-17; column retained for legacy data. */}
             {driver.vehicleType && <Pill>{driver.vehicleType}</Pill>}
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -97,9 +97,10 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
             <input name="availability" defaultValue={driver.availability ?? ''} placeholder="weekends / evenings / on-call" className={inputClass} />
           </Field>
           {/*
-            "Comfortable transporting medical birds" checkbox removed
-            2026-05-17. The underlying `medicalCapable` column is
-            retained in the schema so historical data is preserved.
+            "Comfortable transporting medical birds" checkbox + 🩺 pill
+            both removed 2026-05-17. The underlying `medicalCapable`
+            column is retained in the schema so historical data is
+            preserved, but it is no longer surfaced in the UI.
           */}
           <Field label="Linked foster (cross-link)" className="sm:col-span-2" hint="Same person already in the foster directory? Pick them so updates flow.">
             <select name="linkedFosterId" defaultValue={driver.linkedFosterId ?? ''} className={inputClass}>

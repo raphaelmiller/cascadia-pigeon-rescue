@@ -38,16 +38,15 @@ async function main() {
       phone: '206-555-0101',
       email: 'maya@example.org',
       address: 'Ballard, Seattle',
-      hasTransport: true,
+      canTransportSelf: true,        // was hasTransport (renamed 2026-05-17)
       capacity: 4,
-      quarantineAble: true,
+      skillQuarantine: true,         // was quarantineAble (renamed 2026-05-17)
       medicalSkill: 'advanced',
-      tubeFeedingSkill: true,
-      woundCareSkill: true,
-      neonateSkill: true,
+      skillTubeFeed: true,           // was tubeFeedingSkill (renamed 2026-05-17)
+      skillWoundCare: true,          // was woundCareSkill (renamed 2026-05-17)
+      skillNeonates: true,           // was neonateSkill (renamed 2026-05-17)
       longTermAble: true,
-      preferredTypes: 'medical, neonates',
-      availability: 'available',
+      // preferredTypes + availability dropped 2026-05-17 (no equivalent fields in current Foster schema).
       currentStress: 8,
       whiteboardNote: 'Need pellets ASAP. Ada bandage change Tuesday.',
       notes: 'Long-time CPR foster. Comfortable with crop-feeding and SQ fluids.',
@@ -59,12 +58,11 @@ async function main() {
       phone: '206-555-0102',
       email: 'sam@example.org',
       address: 'Capitol Hill, Seattle',
-      hasTransport: false,
+      canTransportSelf: false,       // was hasTransport (renamed 2026-05-17)
       capacity: 2,
-      medicalSkill: 'basic',
+      medicalSkill: 'beginner',      // 'basic' → 'beginner' (schema vocab change)
       currentStress: 3,
-      preferredTypes: 'feral juveniles',
-      availability: 'available',
+      // preferredTypes + availability dropped 2026-05-17 (no equivalent in Foster schema).
     },
   });
   const jordan = await prisma.foster.create({
@@ -72,10 +70,10 @@ async function main() {
       name: 'Jordan P.',
       phone: '206-555-0103',
       address: 'West Seattle',
-      hasTransport: true,
+      canTransportSelf: true,        // was hasTransport (renamed 2026-05-17)
       capacity: 3,
       medicalSkill: 'intermediate',
-      tubeFeedingSkill: true,
+      skillTubeFeed: true,           // was tubeFeedingSkill (renamed 2026-05-17)
       currentStress: 5,
       whiteboardNote: 'Can take 1 more bird this week.',
     },
@@ -87,9 +85,9 @@ async function main() {
       address: 'Tacoma',
       capacity: 6,
       longTermAble: true,
-      medicalSkill: 'basic',
+      medicalSkill: 'beginner',      // 'basic' → 'beginner' (schema vocab change)
       currentStress: 1,
-      availability: 'limited',
+      // availability dropped 2026-05-17 (no equivalent in Foster schema).
     },
   });
   const priya = await prisma.foster.create({
@@ -97,8 +95,8 @@ async function main() {
       name: 'Priya V.',
       capacity: 3,
       medicalSkill: 'advanced',
-      tubeFeedingSkill: true,
-      woundCareSkill: true,
+      skillTubeFeed: true,           // was tubeFeedingSkill (renamed 2026-05-17)
+      skillWoundCare: true,          // was woundCareSkill (renamed 2026-05-17)
       currentStress: 9,
       whiteboardNote: '🚨 Need rehome for 1 bird — burnout warning.',
       address: 'Bellevue',

@@ -137,7 +137,7 @@ export default async function TransportRequestDetail({
               <option value="">— unassigned —</option>
               {drivers.map(d => (
                 <option key={d.id} value={d.id}>
-                  {d.name}{d.medicalCapable ? ' · 🩺' : ''}{d.maxDistanceMi ? ` · ≤${d.maxDistanceMi}mi` : ''}
+                  {d.name}{d.maxDistanceMi ? ` · ≤${d.maxDistanceMi}mi` : ''}
                 </option>
               ))}
             </select>
