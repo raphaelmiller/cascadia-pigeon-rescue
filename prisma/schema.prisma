@@ -73,6 +73,7 @@ model Bird {
   transports TransportRequest[]
   transportRequestLinks  TransportRequestBird[]
   transportStopLinks     TransportStopBird[]
+  rescuedFromCases  RescueCase[]  // PR D: cases where this bird was the rescue subject
   weightLog  WeightEntry[]
 
   createdAt DateTime @default(now())
@@ -541,9 +542,104 @@ model RescueVolunteer {
 
   shifts          RescueShift[]
   availabilities  RescueAvailability[]
+  assignedCases   RescueCase[]  // PR D: rescue cases assigned to this volunteer
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 2: RESCUE CASES (PR D)
+//
+// A RescueCase is a bird-in-the-field that's been reported but not yet
+// brought into the rescue. Distinct from RescueShift (which is a
+// volunteer's on-call window) and from Bird (which is a bird already in
+// the system). When a case ends with the bird successfully rescued,
+// Christina can convert it to a Bird record — the case keeps a
+// rescuedBirdId pointer so we don't lose the history.
+//
+// Status workflow:
+//   needs_rescue → rescued | escaped_flew_away | closed_unable
+//
+// All fields except `status` are nullable so Christina can log a sighting
+// with whatever info she has and fill in the rest as it comes in.
+// ========================================================================
+model RescueCase {
+  id                String   @id @default(cuid())
+  status            String   @default("needs_rescue")
+  // needs_rescue / rescued / escaped_flew_away / closed_unable
+
+  // What's being rescued
+  birdDescription   String?  // "blue bar pigeon"
+  issue             String?  // "broken wing, can't fly"
+
+  // Where
+  location          String?  // human-readable, e.g. "parking garage on 7th and Spring"
+  address           String?  // canonical address if known
+
+  // Reporter info
+  dateCalledIn      DateTime @default(now())
+  reporterName      String?
+  reporterPhone     String?
+  reporterContact   String?  // catch-all: email / IG handle / other
+
+  // Last-seen tracking (separate from initial sighting, may be updated later)
+  lastSeenAt        DateTime?
+  lastSeenLocation  String?
+  lastSeenNotes     String?
+
+  notes             String?
+
+  // When the bird is rescued + brought into the system, this points to
+  // the newly-created Bird record. Nullable for cases still in progress
+  // or that escaped/closed without a Bird being created.
+  rescuedBirdId     String?
+  rescuedBird       Bird? @relation(fields: [rescuedBirdId], references: [id], onDelete: SetNull)
+
+  // Assigned rescuer(s) — MVP supports single assignment; many-to-many
+  // could come in a later PR.
+  assignedVolunteerId String?
+  assignedVolunteer   RescueVolunteer? @relation(fields: [assignedVolunteerId], references: [id], onDelete: SetNull)
+
+  updates           RescueCaseUpdate[]
+  photos            RescueCasePhoto[]
+
+  // Soft-delete / archive
+  archivedAt        DateTime?
+  deletedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([archivedAt, deletedAt])
+}
+
+// Timeline of attempts / observations / status changes on a case.
+// Append-only from the UI; older entries should rarely be edited.
+model RescueCaseUpdate {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        RescueCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  text        String
+  // Optional: when the attempt/observation happened (may differ from createdAt
+  // if Christina is logging a past attempt after the fact).
+  attemptedAt DateTime @default(now())
+  authorName  String?
+  createdAt   DateTime @default(now())
+
+  @@index([caseId, attemptedAt])
+}
+
+model RescueCasePhoto {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      RescueCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
 }
 
 // ------------------------------------------------------------------
