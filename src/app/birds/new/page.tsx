@@ -18,6 +18,7 @@ async function createBird(formData: FormData) {
   const fosterId = String(formData.get('fosterId') || '') || null;
 
   const foundDate = readPartialDate(formData, 'foundDate');
+  const projectedCleared = readPartialDate(formData, 'projectedCleared');
   const initialWeight = formData.get('weightGrams')
     ? Number(formData.get('weightGrams'))
     : null;
@@ -39,6 +40,11 @@ async function createBird(formData: FormData) {
       finderContact: String(formData.get('finderContact') || '') || null,
       status,
       medicalPriority,
+      currentlyQuarantined: formData.get('currentlyQuarantined') === 'on',
+      clearedForIntegration: formData.get('clearedForIntegration') === 'on',
+      projectedClearedYear: projectedCleared.year,
+      projectedClearedMonth: projectedCleared.month,
+      projectedClearedDay: projectedCleared.day,
       primaryDiagnosis: String(formData.get('primaryDiagnosis') || '') || null,
       contagionRisk: String(formData.get('contagionRisk') || '') || null,
       dietNotes: String(formData.get('dietNotes') || '') || null,
@@ -104,6 +110,18 @@ export default async function NewBirdPage() {
                 ))}
               </select>
             </Field>
+            {/* Quarantine + integration tracking, immediately below status. */}
+            <Field label="Projected to be cleared" className="sm:col-span-2" hint="Year is enough. Add month and day only if you know them.">
+              <PartialDatePicker name="projectedCleared" />
+            </Field>
+            <label className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 ring-gray-200 bg-white hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="currentlyQuarantined" className="h-4 w-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500" />
+              <span className="font-medium">Currently Quarantined</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 ring-gray-200 bg-white hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="clearedForIntegration" className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+              <span className="font-medium">Cleared for Integration</span>
+            </label>
           </div>
         </Card>
 

@@ -61,6 +61,11 @@ export function normalizePartialDate(
 // ---------------------------------------------------------------------
 // Bird
 // ---------------------------------------------------------------------
+const checkboxBool = z.preprocess(
+  v => v === 'on' || v === true || v === 'true',
+  z.boolean(),
+);
+
 export const birdUpdateSchema = z.object({
   name: trimmedString.min(1).max(120).default('Unnamed'),
   status: z.enum(BIRD_STATUSES as unknown as [string, ...string[]]),
@@ -79,6 +84,13 @@ export const birdUpdateSchema = z.object({
   specialHandling: optionalString,
   fosterId: optionalString,
   ...partialDateFields('foundDate'),
+  // Quarantine + integration tracking (replaces the old `quarantine`
+  // status). Booleans default to false when the checkbox is unchecked.
+  currentlyQuarantined: checkboxBool,
+  clearedForIntegration: checkboxBool,
+  // Projected-cleared partial date (year required at the form layer,
+  // month + day optional). Mirrors foundDate*.
+  ...partialDateFields('projectedCleared'),
 });
 
 // One ongoing weight reading on a bird.

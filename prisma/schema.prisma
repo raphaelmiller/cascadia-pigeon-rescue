@@ -34,6 +34,16 @@ model Bird {
   status          String   @default("needs_intake") // see lib/constants
   placementNeed   String?  // urgent_foster / quarantine / medical / etc.
   medicalPriority String   @default("none")          // none / low / medium / high / critical
+  // Quarantine + integration tracking (replaces the old `quarantine` status).
+  // A bird can be quarantined while also having any clinical status, so the
+  // state lives on its own boolean instead of conflating two axes in `status`.
+  currentlyQuarantined  Boolean @default(false)
+  clearedForIntegration Boolean @default(false)
+  // Projected date the bird is expected to clear quarantine. Same partial-date
+  // triple pattern as foundDate* (year required, month + day optional).
+  projectedClearedYear  Int?
+  projectedClearedMonth Int?  // 1..12 when present
+  projectedClearedDay   Int?  // 1..31 when present
   dietNotes       String?
   behaviorNotes   String?
   specialHandling String?

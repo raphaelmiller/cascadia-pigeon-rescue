@@ -320,7 +320,9 @@ export default async function BirdDetail({
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {isDeleted && <Pill tone="red">deleted</Pill>}
             {isArchived && !isDeleted && <Pill tone="gray">archived</Pill>}
-            <Pill tone={STATUS_TONE[bird.status] || 'gray'}>{STATUS_LABELS[bird.status]}</Pill>
+            <Pill tone={STATUS_TONE[bird.status] || 'gray'}>{STATUS_LABELS[bird.status] ?? bird.status}</Pill>
+            {bird.currentlyQuarantined && <Pill tone="yellow">🚫 quarantined</Pill>}
+            {bird.clearedForIntegration && <Pill tone="green">✓ cleared for integration</Pill>}
             {bird.medicalPriority !== 'none' && <Pill tone={PRIORITY_TONE[bird.medicalPriority]}>{bird.medicalPriority}</Pill>}
             {bird.species && <Pill>{bird.species}</Pill>}
             {bird.age && <Pill>age {bird.age}</Pill>}
@@ -443,6 +445,68 @@ export default async function BirdDetail({
                   {BIRD_STATUSES.map(s => (<option key={s} value={s}>{STATUS_LABELS[s]}</option>))}
                 </select>
               </Field>
+              {/*
+                Quarantine + integration tracking. Lives immediately below the
+                Status dropdown so the operator sees and edits both axes at
+                once. "Currently Quarantined" replaces the old `quarantine`
+                status value; "Cleared for Integration" is the green-light
+                flag for moving the bird into a shared flight.
+              */}
+              <Field label="Projected to be cleared" hint="Year is enough. Add month and day only if you know them.">
+                <PartialDatePicker
+                  name="projectedCleared"
+                  defaultValue={{
+                    year: bird.projectedClearedYear,
+                    month: bird.projectedClearedMonth,
+                    day: bird.projectedClearedDay,
+                  }}
+                />
+                {formatPartialDate(
+                  bird.projectedClearedYear,
+                  bird.projectedClearedMonth,
+                  bird.projectedClearedDay,
+                ) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Currently: {formatPartialDate(
+                      bird.projectedClearedYear,
+                      bird.projectedClearedMonth,
+                      bird.projectedClearedDay,
+                    )}
+                  </p>
+                )}
+              </Field>
+              <div className="sm:col-span-2 grid sm:grid-cols-2 gap-2">
+                <label
+                  className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 transition cursor-pointer ${
+                    bird.currentlyQuarantined
+                      ? 'bg-yellow-50 text-yellow-900 ring-yellow-300'
+                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="currentlyQuarantined"
+                    defaultChecked={bird.currentlyQuarantined}
+                    className="h-4 w-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+                  />
+                  <span className="font-medium">Currently Quarantined</span>
+                </label>
+                <label
+                  className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 transition cursor-pointer ${
+                    bird.clearedForIntegration
+                      ? 'bg-emerald-50 text-emerald-900 ring-emerald-300'
+                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="clearedForIntegration"
+                    defaultChecked={bird.clearedForIntegration}
+                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="font-medium">Cleared for Integration</span>
+                </label>
+              </div>
               <Field label="Species">
                 <input name="species" defaultValue={bird.species ?? ''} className={inputClass} />
               </Field>

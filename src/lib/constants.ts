@@ -5,7 +5,9 @@ export const BIRD_STATUSES = [
   'needs_foster',
   'in_foster',
   'at_vet',
-  'quarantine',
+  // 'quarantine' removed 2026-05-17 — quarantine is now tracked via
+  // the Bird.currentlyQuarantined boolean alongside the clinical status,
+  // and birds that were in quarantine have been migrated to medical_hold.
   'medical_hold',
   'needs_transfer',
   'adoption_ready',
@@ -25,7 +27,6 @@ export const STATUS_LABELS: Record<string, string> = {
   needs_foster: 'Needs Foster',
   in_foster: 'In Foster',
   at_vet: 'At Vet',
-  quarantine: 'Quarantine',
   medical_hold: 'Medical Hold',
   needs_transfer: 'Needs Transfer',
   adoption_ready: 'Adoption Ready',
@@ -52,7 +53,6 @@ export const STATUS_TONE: Record<string, string> = {
   at_vet: 'orange',
   medical_hold: 'orange',
   needs_transfer: 'orange',
-  quarantine: 'yellow',
   in_foster: 'green',
   long_term_foster: 'green',
   adoption_ready: 'blue',
