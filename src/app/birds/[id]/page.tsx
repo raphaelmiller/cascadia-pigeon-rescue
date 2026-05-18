@@ -8,6 +8,7 @@ import { activeFosterWhere } from '@/lib/filters';
 import { saveUpload, saveUploads, deleteUpload } from '@/lib/uploads';
 import { getBirdSnapshot } from '@/lib/birdSnapshot';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
+import { ConfirmSubmit } from '@/components/ConfirmSubmit';
 import { requireOperator } from '@/lib/auth';
 import { parseForm, birdUpdateSchema } from '@/lib/schemas';
 import { PartialDatePicker } from '@/components/PartialDatePicker';
@@ -121,6 +122,38 @@ async function addMedication(id: string, formData: FormData) {
     },
   });
   redirect(`/birds/${id}`);
+}
+
+async function updateMedication(birdId: string, medId: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  // Guard against cross-bird PATCH: only update if this med truly belongs
+  // to this bird. updateMany returns count, no throw on miss — perfect
+  // for the "silent no-op" semantics we want here.
+  const name = String(formData.get('name') || '').trim();
+  if (!name) return;
+  const days = formData.get('daysSupplied') ? Number(formData.get('daysSupplied')) : null;
+  await prisma.medication.updateMany({
+    where: { id: medId, birdId },
+    data: {
+      name,
+      dose: String(formData.get('dose') || '') || null,
+      route: String(formData.get('route') || '') || null,
+      frequency: String(formData.get('frequency') || '') || null,
+      daysSupplied: days,
+      notes: String(formData.get('notes') || '') || null,
+    },
+  });
+  redirect(`/birds/${birdId}`);
+}
+
+async function deleteMedication(birdId: string, medId: string) {
+  'use server';
+  await requireOperator();
+  // Same cross-bird guard as updateMedication — deleteMany is a no-op
+  // when the record doesn't match the (id, birdId) pair.
+  await prisma.medication.deleteMany({ where: { id: medId, birdId } });
+  redirect(`/birds/${birdId}`);
 }
 
 async function uploadPhotos(id: string, formData: FormData) {
@@ -601,19 +634,66 @@ export default async function BirdDetail({
               <Empty msg="No medications on file." />
             ) : (
               <ul className="divide-y divide-gray-100 mt-3">
-                {bird.medications.map(m => (
-                  <li key={m.id} className="py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{m.name}</div>
-                      <span className="text-xs text-gray-500">{fmtDate(m.startDate)} →</span>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-0.5">
-                      {m.dose ? `${m.dose} ` : ''}{m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
-                      {m.daysSupplied ? `· ${m.daysSupplied}d supply` : ''}
-                    </div>
-                    {m.notes && <div className="text-xs text-gray-500 mt-0.5">{m.notes}</div>}
-                  </li>
-                ))}
+                {bird.medications.map(m => {
+                  const editAction = updateMedication.bind(null, bird.id, m.id);
+                  const delAction = deleteMedication.bind(null, bird.id, m.id);
+                  return (
+                    <li key={m.id} className="py-2.5">
+                      <details className="group">
+                        <summary className="cursor-pointer list-none flex items-start gap-2">
+                          <span className="text-gray-400 text-xs mt-0.5 group-open:rotate-90 transition-transform inline-block">▸</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="font-medium">{m.name}</div>
+                              <span className="text-xs text-gray-500">{fmtDate(m.startDate)} →</span>
+                            </div>
+                            <div className="text-xs text-gray-600 mt-0.5">
+                              {m.dose ? `${m.dose} ` : ''}{m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
+                              {m.daysSupplied ? `· ${m.daysSupplied}d supply` : ''}
+                            </div>
+                            {m.notes && <div className="text-xs text-gray-500 mt-0.5">{m.notes}</div>}
+                          </div>
+                        </summary>
+                        <div className="mt-3 rounded-lg ring-1 ring-yellow-200 bg-yellow-50/40 p-3">
+                          <form action={editAction} className="grid gap-3 sm:grid-cols-2">
+                            <Field label="Name *">
+                              <input required name="name" defaultValue={m.name} className={inputClass} />
+                            </Field>
+                            <Field label="Dose">
+                              <input name="dose" defaultValue={m.dose ?? ''} className={inputClass} placeholder="e.g. 0.05 mL" />
+                            </Field>
+                            <Field label="Route">
+                              <select name="route" defaultValue={m.route ?? 'PO'} className={inputClass}>
+                                <option>PO</option><option>SC</option><option>IM</option><option>topical</option><option>nebulized</option>
+                              </select>
+                            </Field>
+                            <Field label="Frequency">
+                              <input name="frequency" defaultValue={m.frequency ?? ''} className={inputClass} placeholder="BID, TID, q12h…" />
+                            </Field>
+                            <Field label="Days supplied">
+                              <input type="number" name="daysSupplied" defaultValue={m.daysSupplied ?? ''} className={inputClass} />
+                            </Field>
+                            <Field label="Notes" className="sm:col-span-2">
+                              <textarea name="notes" rows={2} defaultValue={m.notes ?? ''} className={inputClass} />
+                            </Field>
+                            <div className="sm:col-span-2 flex items-center justify-between gap-2 flex-wrap">
+                              <Btn type="submit" variant="primary">Save changes</Btn>
+                            </div>
+                          </form>
+                          <form action={delAction} className="mt-2 pt-2 border-t border-yellow-200">
+                            <ConfirmSubmit
+                              message={`Delete medication record "${m.name}" for ${bird.name}?\n\nThis cannot be undone.`}
+                              className="text-xs text-red-700 hover:text-red-900 hover:underline font-medium"
+                              title="Delete this medication"
+                            >
+                              Delete this medication
+                            </ConfirmSubmit>
+                          </form>
+                        </div>
+                      </details>
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <details className="mt-3">
