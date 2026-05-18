@@ -11,34 +11,17 @@ import { fmtDateTime, fmtRelative, daysUntil, isOverdue } from '@/lib/utils';
 import { URGENCY_TONE, REQUEST_URGENCIES, TRANSPORT_STATUS_TONE } from '@/lib/constants';
 import { activeBirdWhere } from '@/lib/filters';
 import { requireOperator } from '@/lib/auth';
+import { effectivePickupTime, requestTitle, summarizeRoute } from '@/lib/transportDisplay';
 
 export const dynamic = 'force-dynamic';
 
 type ViewMode = 'day' | 'week' | 'month';
 
 // ---------- Server actions ----------
-async function createRequest(formData: FormData) {
-  'use server';
-  await requireOperator();
-  const fromAddress = String(formData.get('fromAddress') || '').trim();
-  const toAddress = String(formData.get('toAddress') || '').trim();
-  const pickupBy = String(formData.get('pickupBy') || '');
-  if (!fromAddress || !toAddress || !pickupBy) return;
-  await prisma.transportRequest.create({
-    data: {
-      fromAddress,
-      toAddress,
-      pickupBy: new Date(pickupBy),
-      deliverBy: formData.get('deliverBy') ? new Date(String(formData.get('deliverBy'))) : null,
-      description: String(formData.get('description') || '') || null,
-      urgency: String(formData.get('urgency') || 'normal'),
-      birdId: String(formData.get('birdId') || '') || null,
-      volunteerId: String(formData.get('volunteerId') || '') || null,
-      status: formData.get('volunteerId') ? 'assigned' : 'open',
-    },
-  });
-  redirect('/transport');
-}
+// PR C: createRequest for single-stop jobs was retired with the new
+// multi-stop UX. New transports route through /transport/requests/new
+// which runs its own server action. createVolunteer remains below.
+
 
 async function createVolunteer(formData: FormData) {
   'use server';
@@ -112,7 +95,10 @@ export default async function TransportPage({
   });
   const unassigned = allActive.filter(t => !t.volunteerId);
   const inTransit = allActive.filter(t => t.status === 'in_transit');
-  const todays = allActive.filter(t => isSameDay(t.pickupBy, today));
+  const todays = allActive.filter(t => {
+    const when = effectivePickupTime(t);
+    return when ? isSameDay(when, today) : false;
+  });
 
   return (
     <div className="space-y-4">
@@ -142,9 +128,12 @@ export default async function TransportPage({
                 <Pill tone={TRANSPORT_STATUS_TONE[t.status] || 'gray'}>{t.status.replace('_', ' ')}</Pill>
                 <Pill tone={URGENCY_TONE[t.urgency] || 'gray'}>{t.urgency}</Pill>
                 <Link href={`/transport/requests/${t.id}`} className="text-sm font-medium hover:underline flex-1 truncate">
-                  {t.fromAddress} → {t.toAddress}
+                  {requestTitle(t)}
                 </Link>
-                <span className="text-xs text-gray-500">{format(t.pickupBy, 'h:mm a')}</span>
+                {(() => {
+                  const when = effectivePickupTime(t);
+                  return when ? <span className="text-xs text-gray-500">{format(when, 'h:mm a')}</span> : <span className="text-xs text-gray-400 italic">no time set</span>;
+                })()}
                 <span className="text-xs">
                   {t.volunteer ? (
                     <Link href={`/transport/drivers/${t.volunteer.id}`} className="font-semibold text-teal-700 hover:underline">
@@ -160,44 +149,20 @@ export default async function TransportPage({
         )}
       </Card>
 
-      {/* Add new job */}
+      {/* PR C: New transport jobs now use the dedicated multi-stop page.
+          The legacy inline single-stop form was removed in favor of a CTA
+          link — the multi-stop UX needs client-side state for repeating
+          rows, which doesn't fit in this server-rendered page. */}
       <Card tone="blue">
-        <details open>
-          <summary className="cursor-pointer text-base font-semibold text-gray-700 uppercase tracking-wide">
-            + Add new transport job
-          </summary>
-          <form action={createRequest} className="grid gap-3 sm:grid-cols-2 mt-3">
-            <Field label="From *"><input required name="fromAddress" placeholder="Pickup address / vet / foster" className={inputClass} /></Field>
-            <Field label="To *"><input required name="toAddress" placeholder="Destination" className={inputClass} /></Field>
-            <Field label="Pickup by *"><input required type="datetime-local" name="pickupBy" className={inputClass} /></Field>
-            <Field label="Deliver by"><input type="datetime-local" name="deliverBy" className={inputClass} /></Field>
-            <Field label="Bird">
-              <select name="birdId" defaultValue="" className={inputClass}>
-                <option value="">— none —</option>
-                {birds.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Urgency">
-              <select name="urgency" defaultValue="normal" className={inputClass}>
-                {REQUEST_URGENCIES.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </Field>
-            <Field label="Assign driver (optional)">
-              <select name="volunteerId" defaultValue="" className={inputClass}>
-                <option value="">— leave open —</option>
-                {volunteers.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Notes / what's needed" className="sm:col-span-2">
-              <textarea name="description" rows={2} className={inputClass} />
-            </Field>
-            <div className="sm:col-span-2"><Btn type="submit" variant="primary">+ Add job</Btn></div>
-          </form>
-        </details>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <H2>Add a new transport job</H2>
+            <p className="text-sm text-gray-600 mt-1">
+              Multi-stop, multi-bird, blank-allowed. Build a vet-day shell and fill in the details later.
+            </p>
+          </div>
+          <Btn href="/transport/requests/new" variant="primary">+ New transport job</Btn>
+        </div>
       </Card>
 
       {/* View toggle + nav */}

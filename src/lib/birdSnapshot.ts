@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { computeRunout } from '@/lib/utils';
+import { effectivePickupTime, requestTitle } from '@/lib/transportDisplay';
 
 /**
  * birdSnapshot — pulls upcoming appointments (calendar events + transports +
@@ -76,11 +77,15 @@ export async function getBirdSnapshot(birdId: string, lookaheadDays = 30): Promi
     });
   }
   for (const t of transports) {
+    // PR C: TransportRequest fields are now nullable for multi-stop
+    // rows. Use the helpers so legacy and new shapes both render.
+    const when = effectivePickupTime(t);
+    if (!when) continue;
     upcoming.push({
       kind: 'transport',
       id: t.id,
-      when: t.pickupBy,
-      title: `${t.fromAddress.slice(0, 24)} → ${t.toAddress.slice(0, 24)}`,
+      when,
+      title: requestTitle(t),
       detail: t.volunteer ? `Driver: ${t.volunteer.name}` : 'UNASSIGNED',
       href: `/transport/requests/${t.id}`,
     });
@@ -158,12 +163,18 @@ export async function getBirdsSnapshots(birdIds: string[], lookaheadDays = 30): 
     });
   }
   for (const t of transports) {
+    // PR C: same nullable handling. Legacy rows still link via t.birdId;
+    // new rows link via TransportRequestBird (not part of this query yet,
+    // so they won't show in the per-bird snapshot until we extend the
+    // fetch — out of scope for PR C MVP).
     if (!t.birdId) continue;
     const snap = out.get(t.birdId);
     if (!snap) continue;
+    const when = effectivePickupTime(t);
+    if (!when) continue;
     snap.upcoming.push({
-      kind: 'transport', id: t.id, when: t.pickupBy,
-      title: `${t.fromAddress.slice(0, 18)} → ${t.toAddress.slice(0, 18)}`,
+      kind: 'transport', id: t.id, when,
+      title: requestTitle(t),
       detail: t.volunteer ? `Driver: ${t.volunteer.name}` : 'UNASSIGNED',
       href: `/transport/requests/${t.id}`,
     });
