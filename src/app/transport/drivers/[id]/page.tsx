@@ -21,7 +21,9 @@ async function updateDriver(id: string, formData: FormData) {
       location: String(formData.get('location') || '') || null,
       vehicleType: String(formData.get('vehicleType') || '') || null,
       maxDistanceMi: formData.get('maxDistanceMi') ? Number(formData.get('maxDistanceMi')) : null,
-      medicalCapable: formData.get('medicalCapable') === 'on',
+      // medicalCapable was removed from the driver UI 2026-05-17. The DB
+      // column is retained for historical data; omitted from the payload
+      // so existing values stay untouched.
       availability: String(formData.get('availability') || '') || null,
       notes: String(formData.get('notes') || '') || null,
       linkedFosterId: String(formData.get('linkedFosterId') || '') || null,
@@ -94,10 +96,11 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
           <Field label="Availability" className="sm:col-span-2">
             <input name="availability" defaultValue={driver.availability ?? ''} placeholder="weekends / evenings / on-call" className={inputClass} />
           </Field>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" name="medicalCapable" defaultChecked={driver.medicalCapable} className="h-4 w-4" />
-            Comfortable transporting medical birds
-          </label>
+          {/*
+            "Comfortable transporting medical birds" checkbox removed
+            2026-05-17. The underlying `medicalCapable` column is
+            retained in the schema so historical data is preserved.
+          */}
           <Field label="Linked foster (cross-link)" className="sm:col-span-2" hint="Same person already in the foster directory? Pick them so updates flow.">
             <select name="linkedFosterId" defaultValue={driver.linkedFosterId ?? ''} className={inputClass}>
               <option value="">— not linked —</option>

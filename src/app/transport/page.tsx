@@ -61,7 +61,9 @@ async function createVolunteer(formData: FormData) {
       linkedFosterId,
       vehicleType: String(formData.get('vehicleType') || '') || null,
       maxDistanceMi: formData.get('maxDistanceMi') ? Number(formData.get('maxDistanceMi')) : null,
-      medicalCapable: formData.get('medicalCapable') === 'on',
+      // medicalCapable was removed from the new-driver form 2026-05-17.
+      // The DB column is retained for historical data — new drivers get
+      // the schema default (false); existing records keep their value.
       availability: String(formData.get('availability') || '') || null,
       notes: String(formData.get('notes') || '') || null,
     } as Parameters<typeof prisma.transportVolunteer.create>[0]['data'],
@@ -269,9 +271,12 @@ export default async function TransportPage({
             <Field label="Availability" className="sm:col-span-2">
               <input name="availability" placeholder="weekends / evenings / on-call" className={inputClass} />
             </Field>
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input type="checkbox" name="medicalCapable" className="h-4 w-4" /> Comfortable transporting medical birds
-            </label>
+            {/*
+              "Comfortable transporting medical birds" checkbox removed
+              2026-05-17. The underlying `medicalCapable` column is
+              retained in the schema so historical data is preserved;
+              new drivers default to false.
+            */}
             <Field label="Notes" className="sm:col-span-2">
               <textarea name="notes" rows={2} className={inputClass} />
             </Field>
