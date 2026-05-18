@@ -3,6 +3,9 @@
 
 import { compilePreset, type RecurrencePreset, detectConflicts } from './scheduling';
 
+/** Standard result shape returned by every PR-B save / delete action. */
+export type SaveResult = { ok: boolean; warnings?: string[]; error?: string };
+
 export type ParsedBlock = {
   id: string | null;
   startsAt: Date;
