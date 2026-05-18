@@ -385,9 +385,52 @@ model TransportVolunteer {
   linkedFoster    Foster?  @relation("FosterAsDriver", fields: [linkedFosterId], references: [id])
 
   requests        TransportRequest[]
+  availabilities  TransportAvailability[]
+  shifts          TransportShift[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// Availability blocks for a transport volunteer (driver). A row with
+// rrule == null is a one-off block. A row with rrule != null is the
+// template for a recurring availability; startsAt/endsAt define the
+// FIRST occurrence's time-of-day + duration, and the recurrence pattern
+// fans out from there (expanded by the rrule lib at render time).
+// ------------------------------------------------------------------
+model TransportAvailability {
+  id          String   @id @default(cuid())
+  volunteerId String
+  volunteer   TransportVolunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  rrule       String?  // iCal RRULE string when this is a recurring template
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([volunteerId, startsAt])
+}
+
+// ------------------------------------------------------------------
+// Scheduled transport shifts (NOT to be confused with TransportRequest,
+// which is the per-job pickup→deliver assignment). A shift is a block of
+// time a driver is on duty / scheduled for transport work.
+// ------------------------------------------------------------------
+model TransportShift {
+  id           String   @id @default(cuid())
+  volunteerId  String?
+  volunteer    TransportVolunteer? @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
+  startsAt     DateTime
+  endsAt       DateTime
+  rrule        String?  // when recurring
+  role         String?  // free text — "Long-haul", "Local", "Pickup", etc.
+  notes        String?
+  status       String   @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
+  createdAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([volunteerId, startsAt])
+  @@index([startsAt])
 }
 
 model TransportRequest {
@@ -429,24 +472,49 @@ model RescueVolunteer {
   linkedFoster    Foster?  @relation("FosterAsRescuer", fields: [linkedFosterId], references: [id])
 
   shifts          RescueShift[]
+  availabilities  RescueAvailability[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// Availability blocks for a rescue volunteer. Same shape + semantics
+// as TransportAvailability — see that model's comments.
+// ------------------------------------------------------------------
+model RescueAvailability {
+  id          String   @id @default(cuid())
+  volunteerId String
+  volunteer   RescueVolunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  startsAt    DateTime
+  endsAt      DateTime
+  rrule       String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([volunteerId, startsAt])
 }
 
 model RescueShift {
   id           String   @id @default(cuid())
   startsAt     DateTime
   endsAt       DateTime
+  // Pre-existing fields (kept for backward compat with the /rescue page):
   shiftType    String   @default("on_call") // on_call / active / emergency_backup
   area         String?
   notes        String?
+  // PR-B additions: recurrence + role + status workflow.
+  rrule        String?  // when recurring
+  role         String?  // free text — "Catch", "Field assist", etc.
+  status       String   @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
 
   volunteerId  String?
   volunteer    RescueVolunteer? @relation(fields: [volunteerId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@index([volunteerId, startsAt])
+  @@index([startsAt])
 }
 
 // ========================================================================
