@@ -5,7 +5,7 @@ import { requireOperator } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { parseBlockForm } from '@/lib/scheduling-actions';
 
-export type SaveResult = { ok: boolean; warnings?: string[]; error?: string };
+import type { SaveResult } from '@/lib/scheduling-actions';
 
 export async function saveRescueAvailability(fd: FormData): Promise<SaveResult> {
   await requireOperator();
