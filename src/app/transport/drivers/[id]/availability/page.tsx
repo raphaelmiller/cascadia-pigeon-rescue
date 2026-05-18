@@ -77,7 +77,7 @@ export default async function DriverAvailabilityPage({
           lockedVolunteerId={driver.id}
           saveAction={saveTransportAvailability}
           deleteAction={deleteTransportAvailability}
-          weekHref={(d) => `/transport/drivers/${id}/availability?date=${format(d, 'yyyy-MM-dd')}`}
+          weekHrefBase={`/transport/drivers/${id}/availability`}
         />
       </Card>
     </div>

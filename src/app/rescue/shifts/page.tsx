@@ -139,7 +139,8 @@ export default async function RescueShiftsPage({
           assignees={rescuers.map(r => ({ id: r.id, name: r.name }))}
           saveAction={saveRescueShift}
           deleteAction={deleteRescueShift}
-          weekHref={(d) => `/rescue/shifts?date=${format(d, 'yyyy-MM-dd')}${rescuerFilter ? `&rescuer=${rescuerFilter}` : ''}`}
+          weekHrefBase="/rescue/shifts"
+          weekHrefSuffix={rescuerFilter ? `rescuer=${rescuerFilter}` : undefined}
         />
       </Card>
     </div>

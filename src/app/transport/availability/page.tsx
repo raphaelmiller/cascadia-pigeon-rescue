@@ -102,7 +102,8 @@ export default async function TransportAvailabilityPage({
           assignees={drivers.map(d => ({ id: d.id, name: d.name }))}
           saveAction={saveTransportAvailability}
           deleteAction={deleteTransportAvailability}
-          weekHref={(d) => `/transport/availability?date=${format(d, 'yyyy-MM-dd')}${driverFilter ? `&driver=${driverFilter}` : ''}`}
+          weekHrefBase="/transport/availability"
+          weekHrefSuffix={driverFilter ? `driver=${driverFilter}` : undefined}
         />
       </Card>
     </div>

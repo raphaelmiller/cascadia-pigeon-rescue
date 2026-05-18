@@ -162,7 +162,8 @@ export default async function TransportShiftsPage({
           assignees={drivers.map(d => ({ id: d.id, name: d.name }))}
           saveAction={saveTransportShift}
           deleteAction={deleteTransportShift}
-          weekHref={(d) => `/transport/shifts?date=${format(d, 'yyyy-MM-dd')}${driverFilter ? `&driver=${driverFilter}` : ''}`}
+          weekHrefBase="/transport/shifts"
+          weekHrefSuffix={driverFilter ? `driver=${driverFilter}` : undefined}
         />
       </Card>
     </div>

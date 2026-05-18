@@ -99,7 +99,8 @@ export default async function RescueAvailabilityPage({
           assignees={rescuers.map(r => ({ id: r.id, name: r.name }))}
           saveAction={saveRescueAvailability}
           deleteAction={deleteRescueAvailability}
-          weekHref={(d) => `/rescue/availability?date=${format(d, 'yyyy-MM-dd')}${rescuerFilter ? `&rescuer=${rescuerFilter}` : ''}`}
+          weekHrefBase="/rescue/availability"
+          weekHrefSuffix={rescuerFilter ? `rescuer=${rescuerFilter}` : undefined}
         />
       </Card>
     </div>

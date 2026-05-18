@@ -70,8 +70,14 @@ export type WeekViewProps = {
    * modal pre-filled with this range.
    */
   onCreate?: (startsAt: Date, endsAt: Date) => void;
-  /** Optional href factory for week nav. Defaults to ?date=YYYY-MM-DD. */
-  weekHref?: (date: Date) => string;
+  /**
+   * Base path for the prev/today/next links. Output is
+   * `${weekHrefBase}?date=YYYY-MM-DD${weekHrefSuffix ?? ''}`.
+   * Defaults to the current pathname (relative ?date=…).
+   */
+  weekHrefBase?: string;
+  /** Optional extra query string fragment appended after `&` (no leading &). */
+  weekHrefSuffix?: string;
 };
 
 // ---------- component ----------
@@ -83,7 +89,8 @@ export function WeekView({
   endHour = 22,
   onEdit,
   onCreate,
-  weekHref,
+  weekHrefBase,
+  weekHrefSuffix,
 }: WeekViewProps) {
   const weekStart = startOfWeek(cursor, { weekStartsOn: 1 }); // Mon
   const weekEnd = endOfWeek(cursor, { weekStartsOn: 1 });
@@ -180,8 +187,11 @@ export function WeekView({
   };
 
   // ---------- week navigation hrefs ----------
-  const hrefFor = (d: Date) =>
-    weekHref ? weekHref(d) : `?date=${format(d, 'yyyy-MM-dd')}`;
+  const hrefFor = (d: Date) => {
+    const base = weekHrefBase ?? '';
+    const suffix = weekHrefSuffix ? `&${weekHrefSuffix}` : '';
+    return `${base}?date=${format(d, 'yyyy-MM-dd')}${suffix}`;
+  };
   const prevHref = hrefFor(subWeeks(cursor, 1));
   const nextHref = hrefFor(addWeeks(cursor, 1));
   const todayHref = hrefFor(new Date());

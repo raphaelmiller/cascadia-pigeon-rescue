@@ -77,7 +77,7 @@ export default async function RescuerAvailabilityPage({
           lockedVolunteerId={rescuer.id}
           saveAction={saveRescueAvailability}
           deleteAction={deleteRescueAvailability}
-          weekHref={(d) => `/rescue/rescuers/${id}/availability?date=${format(d, 'yyyy-MM-dd')}`}
+          weekHrefBase={`/rescue/rescuers/${id}/availability`}
         />
       </Card>
     </div>

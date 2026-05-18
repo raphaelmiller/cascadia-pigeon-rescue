@@ -48,8 +48,9 @@ export type WeekSchedulerProps = {
   /** Server actions, pre-bound by the page. */
   saveAction: (fd: FormData) => Promise<SaveResult>;
   deleteAction?: (id: string) => Promise<SaveResult>;
-  /** href factory for the WeekView's prev/today/next links. */
-  weekHref?: (date: Date) => string;
+  /** Base path for WeekView nav links; date appended as `?date=...`. */
+  weekHrefBase?: string;
+  weekHrefSuffix?: string;
 };
 
 export function WeekScheduler({
@@ -62,7 +63,8 @@ export function WeekScheduler({
   assigneeLabel,
   saveAction,
   deleteAction,
-  weekHref,
+  weekHrefBase,
+  weekHrefSuffix,
 }: WeekSchedulerProps) {
   const cursorDate = typeof cursor === 'string' ? new Date(cursor) : cursor;
   const [modal, setModal] = useState<ScheduleModalState>({ open: false });
@@ -115,7 +117,8 @@ export function WeekScheduler({
         events={evs}
         onCreate={openCreate}
         onEdit={openEdit}
-        weekHref={weekHref}
+        weekHrefBase={weekHrefBase}
+        weekHrefSuffix={weekHrefSuffix}
       />
       <ScheduleBlockModal
         kind={kind}
