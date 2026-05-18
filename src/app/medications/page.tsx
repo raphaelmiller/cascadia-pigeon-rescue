@@ -82,7 +82,8 @@ export default async function MedsPage() {
                   <span className="text-xs text-gray-500">{fmtDate(m.startDate)} →</span>
                 </div>
                 <div className="text-xs text-gray-600 mt-0.5">
-                  {m.dose ? `${m.dose} ` : ''}{m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
+                  {m.dose ? `${m.dose}${m.units ? ' ' + m.units : ''} ` : (m.units ? `${m.units} ` : '')}
+                  {m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
                   {m.daysSupplied ? `· ${m.daysSupplied}d supply` : ''}
                   {m.runout ? ` · runout ${fmtDate(m.runout)}` : ''}
                 </div>

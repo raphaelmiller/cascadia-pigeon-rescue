@@ -177,6 +177,11 @@ model Medication {
   bird          Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
   name          String
   dose          String?
+  // Units the dose is expressed in (mg / ml / drops / tablets / capsules
+  // / IU / mcg). Free-text so Christina can type something we haven't
+  // seen, but the form datalist suggests the common set + anything in
+  // MedicationCatalog.defaultUnits.
+  units         String?
   concentration String?
   route         String?  // PO / SC / IM / topical / nebulized
   frequency     String?  // once daily, BID, TID, etc.
@@ -459,6 +464,21 @@ model Supply {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// MEDICATION CATALOG (autocomplete source)
+// ========================================================================
+// Phase-1 scope: name + units only. Christina types a med name on a
+// bird's record; if it's new, we add it here so the next time the same
+// name pops up in the combobox. `defaultUnits` is whatever units were
+// typed on the first occurrence — surfaced as the suggested default
+// when the name is reused.
+model MedicationCatalog {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  defaultUnits String?  // mg / ml / drops / tablets / capsules / IU / mcg
+  createdAt    DateTime @default(now())
 }
 
 // ========================================================================

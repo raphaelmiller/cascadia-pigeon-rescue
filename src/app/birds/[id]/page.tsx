@@ -104,23 +104,45 @@ async function restoreBird(id: string) {
   redirect(`/birds/${id}`);
 }
 
+/**
+ * Upsert a medication name into the catalog so future records on any
+ * bird can autocomplete from it. Phase-1 scope: name + defaultUnits.
+ *
+ * Behaviour:
+ *  - New name → INSERT with the supplied units as the suggested default.
+ *  - Existing name → do not overwrite defaultUnits (Christina's first
+ *    answer wins; later edits can be a Phase-2 feature).
+ */
+async function upsertCatalogEntry(name: string, units: string | null) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  await prisma.medicationCatalog.upsert({
+    where: { name: trimmed },
+    create: { name: trimmed, defaultUnits: units },
+    update: {}, // intentionally a no-op on existing rows
+  });
+}
+
 async function addMedication(id: string, formData: FormData) {
   'use server';
   await requireOperator();
   const name = String(formData.get('name') || '').trim();
   if (!name) return;
+  const units = String(formData.get('units') || '').trim() || null;
   const days = formData.get('daysSupplied') ? Number(formData.get('daysSupplied')) : null;
   await prisma.medication.create({
     data: {
       birdId: id,
       name,
       dose: String(formData.get('dose') || '') || null,
+      units,
       route: String(formData.get('route') || '') || null,
       frequency: String(formData.get('frequency') || '') || null,
       daysSupplied: days,
       notes: String(formData.get('notes') || '') || null,
     },
   });
+  await upsertCatalogEntry(name, units);
   redirect(`/birds/${id}`);
 }
 
@@ -132,18 +154,22 @@ async function updateMedication(birdId: string, medId: string, formData: FormDat
   // for the "silent no-op" semantics we want here.
   const name = String(formData.get('name') || '').trim();
   if (!name) return;
+  const units = String(formData.get('units') || '').trim() || null;
   const days = formData.get('daysSupplied') ? Number(formData.get('daysSupplied')) : null;
   await prisma.medication.updateMany({
     where: { id: medId, birdId },
     data: {
       name,
       dose: String(formData.get('dose') || '') || null,
+      units,
       route: String(formData.get('route') || '') || null,
       frequency: String(formData.get('frequency') || '') || null,
       daysSupplied: days,
       notes: String(formData.get('notes') || '') || null,
     },
   });
+  // Renaming a med on edit should still seed the catalog with the new name.
+  await upsertCatalogEntry(name, units);
   redirect(`/birds/${birdId}`);
 }
 
@@ -155,6 +181,11 @@ async function deleteMedication(birdId: string, medId: string) {
   await prisma.medication.deleteMany({ where: { id: medId, birdId } });
   redirect(`/birds/${birdId}`);
 }
+
+// Curated suggestions surfaced in the units datalist. The catalog also
+// contributes any units Christina has typed before, so the dropdown
+// grows organically.
+const COMMON_UNITS = ['mg', 'ml', 'drops', 'tablets', 'capsules', 'IU', 'mcg'] as const;
 
 async function uploadPhotos(id: string, formData: FormData) {
   'use server';
@@ -268,6 +299,15 @@ export default async function BirdDetail({
   const isDeleted = !!bird.deletedAt;
 
   const fosters = await prisma.foster.findMany({ where: activeFosterWhere, orderBy: { name: 'asc' } });
+
+  // Medication-catalog autocomplete sources. The datalists below offer
+  // these as suggestions; the underlying inputs are still free-text so
+  // anything new is accepted (and upserted into the catalog on submit).
+  const medCatalog = await prisma.medicationCatalog.findMany({ orderBy: { name: 'asc' } });
+  const unitsSuggestions = Array.from(new Set([
+    ...COMMON_UNITS,
+    ...medCatalog.map(c => c.defaultUnits).filter((u): u is string => !!u),
+  ])).sort((a, b) => a.localeCompare(b));
   const updateAction = updateBird.bind(null, bird.id);
   const noteAction = addCaseNote.bind(null, bird.id);
   const medAction = addMedication.bind(null, bird.id);
@@ -629,6 +669,26 @@ export default async function BirdDetail({
 
           {/* Medications */}
           <Card tone={bird.medications.length ? 'yellow' : 'gray'}>
+            {/*
+              Shared datalists for the medication name + units inputs on
+              every form in this card (create + per-row edit). Datalists
+              can be referenced by id from any number of <input list>
+              elements, so we only declare them once. defaultUnits is
+              shown as the option label so Christina sees what units the
+              med usually carries before she types anything.
+            */}
+            <datalist id="med-names">
+              {medCatalog.map(c => (
+                <option key={c.id} value={c.name}>
+                  {c.defaultUnits ? c.defaultUnits : ''}
+                </option>
+              ))}
+            </datalist>
+            <datalist id="med-units">
+              {unitsSuggestions.map(u => (
+                <option key={u} value={u} />
+              ))}
+            </datalist>
             <H2>Medications</H2>
             {bird.medications.length === 0 ? (
               <Empty msg="No medications on file." />
@@ -648,7 +708,8 @@ export default async function BirdDetail({
                               <span className="text-xs text-gray-500">{fmtDate(m.startDate)} →</span>
                             </div>
                             <div className="text-xs text-gray-600 mt-0.5">
-                              {m.dose ? `${m.dose} ` : ''}{m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
+                              {m.dose ? `${m.dose}${m.units ? ' ' + m.units : ''} ` : (m.units ? `${m.units} ` : '')}
+                              {m.route ? `· ${m.route} ` : ''}{m.frequency ? `· ${m.frequency} ` : ''}
                               {m.daysSupplied ? `· ${m.daysSupplied}d supply` : ''}
                             </div>
                             {m.notes && <div className="text-xs text-gray-500 mt-0.5">{m.notes}</div>}
@@ -657,10 +718,13 @@ export default async function BirdDetail({
                         <div className="mt-3 rounded-lg ring-1 ring-yellow-200 bg-yellow-50/40 p-3">
                           <form action={editAction} className="grid gap-3 sm:grid-cols-2">
                             <Field label="Name *">
-                              <input required name="name" defaultValue={m.name} className={inputClass} />
+                              <input required name="name" defaultValue={m.name} list="med-names" autoComplete="off" className={inputClass} />
+                            </Field>
+                            <Field label="Units" hint="mg, ml, drops, tablets…">
+                              <input name="units" defaultValue={m.units ?? ''} list="med-units" autoComplete="off" className={inputClass} placeholder="mg" />
                             </Field>
                             <Field label="Dose">
-                              <input name="dose" defaultValue={m.dose ?? ''} className={inputClass} placeholder="e.g. 0.05 mL" />
+                              <input name="dose" defaultValue={m.dose ?? ''} className={inputClass} placeholder="e.g. 0.05" />
                             </Field>
                             <Field label="Route">
                               <select name="route" defaultValue={m.route ?? 'PO'} className={inputClass}>
@@ -699,8 +763,13 @@ export default async function BirdDetail({
             <details className="mt-3">
               <summary className="cursor-pointer text-sm text-teal-700">+ Add medication</summary>
               <form action={medAction} className="grid gap-3 sm:grid-cols-2 mt-3">
-                <Field label="Name *"><input required name="name" className={inputClass} /></Field>
-                <Field label="Dose"><input name="dose" className={inputClass} placeholder="e.g. 0.05 mL" /></Field>
+                <Field label="Name *">
+                  <input required name="name" list="med-names" autoComplete="off" className={inputClass} placeholder="start typing…" />
+                </Field>
+                <Field label="Units" hint="mg, ml, drops, tablets…">
+                  <input name="units" list="med-units" autoComplete="off" className={inputClass} placeholder="mg" />
+                </Field>
+                <Field label="Dose"><input name="dose" className={inputClass} placeholder="e.g. 0.05" /></Field>
                 <Field label="Route">
                   <select name="route" defaultValue="PO" className={inputClass}>
                     <option>PO</option><option>SC</option><option>IM</option><option>topical</option><option>nebulized</option>
