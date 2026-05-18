@@ -90,12 +90,27 @@ export default async function RescuePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <H1>Rescue Shifts</H1>
+        <H1>Rescue</H1>
         <div className="flex gap-2 flex-wrap">
+          <Btn href="/rescue/cases" variant="primary">🚨 Rescue cases →</Btn>
           <Btn href="/rescue/availability" variant="ghost">Rescuer availability →</Btn>
           <Btn href="/rescue/shifts" variant="ghost">Calendar →</Btn>
         </div>
       </div>
+
+      {/* PR D: prominent CTA for new rescue cases since that's the urgent
+          workflow — a bird-in-the-field call needs immediate logging. */}
+      <Card tone="red">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <H2>Bird needs rescuing?</H2>
+            <p className="text-sm text-gray-600 mt-1">
+              Log a new rescue case — description, location, reporter info, photos.
+            </p>
+          </div>
+          <Btn href="/rescue/cases/new" variant="primary">+ Report new rescue case</Btn>
+        </div>
+      </Card>
 
       {/* Today coverage */}
       <Card tone={today.filter(s => s.volunteerId).length === 0 ? 'red' : 'green'}>

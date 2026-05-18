@@ -355,3 +355,23 @@ export const SHIFT_TYPE_TONE: Record<string, string> = {
 };
 
 export const SUPPLY_CATEGORIES = ['food', 'medical', 'housing', 'cleaning', 'paperwork', 'other'] as const;
+
+// PR D: Rescue case status workflow
+export const RESCUE_CASE_STATUSES = [
+  'needs_rescue',
+  'rescued',
+  'escaped_flew_away',
+  'closed_unable',
+] as const;
+export const RESCUE_CASE_STATUS_LABEL: Record<string, string> = {
+  needs_rescue: '🚨 Needs rescue',
+  rescued: '✅ Rescued',
+  escaped_flew_away: '💨 Escaped',
+  closed_unable: '❌ Closed',
+};
+export const RESCUE_CASE_STATUS_TONE: Record<string, string> = {
+  needs_rescue: 'red',
+  rescued: 'green',
+  escaped_flew_away: 'yellow',
+  closed_unable: 'gray',
+};
