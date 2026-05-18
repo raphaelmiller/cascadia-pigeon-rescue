@@ -6,6 +6,7 @@ import { fmtDateTime, daysUntil, isOverdue } from '@/lib/utils';
 import {
   TRANSPORT_STATUS_TONE, URGENCY_TONE, SHIFT_TYPE_TONE,
 } from '@/lib/constants';
+import { effectivePickupTime, requestTitle, summarizeRoute } from '@/lib/transportDisplay';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,11 @@ async function TransportFocus({ bucket }: { bucket: string }) {
   if (bucket === 'pending')      items = allActive.filter(t => t.status === 'open');
   else if (bucket === 'unassigned') items = allActive.filter(t => !t.volunteerId);
   else if (bucket === 'in_transit') items = allActive.filter(t => t.status === 'in_transit');
-  else if (bucket === 'next7')   items = allActive.filter(t => (daysUntil(t.pickupBy) ?? 99) <= 7);
+  else if (bucket === 'next7')   items = allActive.filter(t => {
+    const when = effectivePickupTime(t);
+    if (!when) return false;
+    return (daysUntil(when) ?? 99) <= 7;
+  });
 
   return (
     <div className="space-y-4">
@@ -79,8 +84,9 @@ async function TransportFocus({ bucket }: { bucket: string }) {
         ) : (
           <ul className="divide-y divide-gray-100">
             {items.map(t => {
-              const overdue = !['delivered', 'cancelled'].includes(t.status) && isOverdue(t.pickupBy);
-              const days = daysUntil(t.pickupBy);
+              const when = effectivePickupTime(t);
+              const overdue = !!when && !['delivered', 'cancelled'].includes(t.status) && isOverdue(when);
+              const days = when ? daysUntil(when) : null;
               return (
                 <li key={t.id} className="py-3">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -89,7 +95,7 @@ async function TransportFocus({ bucket }: { bucket: string }) {
                     {!t.volunteerId && <Pill tone="red">UNASSIGNED</Pill>}
                     {overdue && <Pill tone="red">overdue</Pill>}
                     <span className="text-xs text-gray-500 ml-auto">
-                      {fmtDateTime(t.pickupBy)}
+                      {when ? fmtDateTime(when) : <span className="italic">no time set</span>}
                       {typeof days === 'number' && (
                         <span className="ml-1 text-gray-400">
                           ({days === 0 ? 'today' : days === 1 ? 'tomorrow' : days < 0 ? `${-days}d ago` : `in ${days}d`})
@@ -98,7 +104,7 @@ async function TransportFocus({ bucket }: { bucket: string }) {
                     </span>
                   </div>
                   <div className="mt-1.5 text-sm">
-                    <strong>{t.fromAddress}</strong> → <strong>{t.toAddress}</strong>
+                    <strong>{requestTitle(t)}</strong> · <span className="text-gray-700">{summarizeRoute(t, 24)}</span>
                   </div>
                   {t.description && <p className="text-sm text-gray-600 mt-0.5">{t.description}</p>}
                   <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 flex-wrap">

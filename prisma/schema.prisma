@@ -71,6 +71,8 @@ model Bird {
   caseNotes  CaseNote[]
   bandageTasks BandageTask[]
   transports TransportRequest[]
+  transportRequestLinks  TransportRequestBird[]
+  transportStopLinks     TransportStopBird[]
   weightLog  WeightEntry[]
 
   createdAt DateTime @default(now())
@@ -435,11 +437,20 @@ model TransportShift {
 
 model TransportRequest {
   id           String   @id @default(cuid())
+  // NEW (PR C): optional title for multi-stop requests. Legacy rows leave
+  // this null; UI shows a fallback like "Transport request" when null.
+  title        String?
+  // NEW (PR C): free-text type (vet / intake / transfer / surrender / other).
+  type         String?
   birdId       String?
   bird         Bird?    @relation(fields: [birdId], references: [id], onDelete: SetNull)
-  fromAddress  String
-  toAddress    String
-  pickupBy     DateTime
+  // LEGACY single-stop fields. Made nullable in PR C so new multi-stop
+  // requests can leave them blank. Existing data is preserved; render the
+  // detail page with a "migrate to multi-stop" banner when these are set
+  // and there are no TransportStop rows.
+  fromAddress  String?
+  toAddress    String?
+  pickupBy     DateTime?
   deliverBy    DateTime?
   description  String?
   urgency      String   @default("normal") // low / normal / high / urgent
@@ -449,8 +460,65 @@ model TransportRequest {
   volunteerId  String?
   volunteer    TransportVolunteer? @relation(fields: [volunteerId], references: [id])
 
+  // PR C: multi-stop + multi-bird (back-compat: legacy rows have neither).
+  stops        TransportStop[]
+  birds        TransportRequestBird[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// PR C: a single stop in a multi-stop transport request. `kind` says
+// whether this is a pickup or a dropoff. Location + times are nullable
+// so Christina can create a shell to fill in later ("we know there's
+// a pickup but not where/when yet"). timeEnd is null for a single time;
+// non-null means a window from timeStart to timeEnd.
+// ------------------------------------------------------------------
+model TransportStop {
+  id          String   @id @default(cuid())
+  requestId   String
+  request     TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  kind        String   // "pickup" | "dropoff"
+  location    String?
+  timeStart   DateTime?
+  timeEnd     DateTime?
+  notes       String?
+  sortOrder   Int      @default(0)
+
+  birds       TransportStopBird[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([requestId, sortOrder])
+}
+
+// ------------------------------------------------------------------
+// PR C: many-to-many between TransportRequest and Bird. Replaces the
+// legacy single `birdId` for multi-bird requests. Legacy rows continue
+// to use TransportRequest.birdId until edited.
+// ------------------------------------------------------------------
+model TransportRequestBird {
+  requestId String
+  birdId    String
+  request   TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  bird      Bird @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  @@id([requestId, birdId])
+}
+
+// ------------------------------------------------------------------
+// PR C: optional per-stop bird assignment, for the "some birds picked
+// up at vet, others dropped off elsewhere" case. MVP UI doesn't expose
+// this yet; the table is here so we don't need another migration to
+// turn it on later.
+// ------------------------------------------------------------------
+model TransportStopBird {
+  stopId    String
+  birdId    String
+  stop      TransportStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  bird      Bird @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  @@id([stopId, birdId])
 }
 
 // ========================================================================

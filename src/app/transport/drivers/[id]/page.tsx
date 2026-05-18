@@ -6,6 +6,7 @@ import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { TRANSPORT_STATUS_TONE } from '@/lib/constants';
 import { activeFosterWhere } from '@/lib/filters';
 import { requireOperator } from '@/lib/auth';
+import { effectivePickupTime, requestTitle, summarizeRoute } from '@/lib/transportDisplay';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,17 +125,21 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
         <Card tone="blue">
           <H2>Upcoming / active jobs ({upcoming.length})</H2>
           <ul className="divide-y divide-gray-100 mt-3">
-            {upcoming.map(r => (
-              <li key={r.id} className="py-2.5">
-                <Link href={`/transport/requests/${r.id}`} className="hover:underline text-sm">
-                  <span className="font-medium">{r.fromAddress} → {r.toAddress}</span>
-                </Link>
-                <div className="text-xs text-gray-500 mt-0.5 flex gap-2 items-center flex-wrap">
-                  <Pill tone={TRANSPORT_STATUS_TONE[r.status] || 'gray'}>{r.status.replace('_', ' ')}</Pill>
-                  <span>{fmtDateTime(r.pickupBy)}</span>
-                </div>
-              </li>
-            ))}
+            {upcoming.map(r => {
+              const when = effectivePickupTime(r);
+              return (
+                <li key={r.id} className="py-2.5">
+                  <Link href={`/transport/requests/${r.id}`} className="hover:underline text-sm">
+                    <span className="font-medium">{requestTitle(r)}</span>
+                    <span className="text-gray-600"> · {summarizeRoute(r, 20)}</span>
+                  </Link>
+                  <div className="text-xs text-gray-500 mt-0.5 flex gap-2 items-center flex-wrap">
+                    <Pill tone={TRANSPORT_STATUS_TONE[r.status] || 'gray'}>{r.status.replace('_', ' ')}</Pill>
+                    <span>{when ? fmtDateTime(when) : <span className="italic">no time set</span>}</span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </Card>
       )}
@@ -144,11 +149,14 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
           <details>
             <summary className="cursor-pointer font-semibold text-gray-700">History ({completed.length})</summary>
             <ul className="divide-y divide-gray-100 mt-3">
-              {completed.map(r => (
-                <li key={r.id} className="py-2 text-sm text-gray-500">
-                  {fmtDateTime(r.pickupBy)} · {r.fromAddress} → {r.toAddress} · {r.status}
-                </li>
-              ))}
+              {completed.map(r => {
+                const when = effectivePickupTime(r);
+                return (
+                  <li key={r.id} className="py-2 text-sm text-gray-500">
+                    {when ? fmtDateTime(when) : '—'} · {summarizeRoute(r, 18)} · {r.status}
+                  </li>
+                );
+              })}
             </ul>
           </details>
         </Card>

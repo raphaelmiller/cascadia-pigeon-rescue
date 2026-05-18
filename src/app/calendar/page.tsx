@@ -8,6 +8,7 @@ import {
 } from 'date-fns';
 import { H1, H2, Card, Btn, Empty, Field, inputClass, Pill } from '@/components/ui';
 import { fmtDateTime, daysUntil, isOverdue, computeRunout } from '@/lib/utils';
+import { effectivePickupTime, requestTitle, summarizeRoute } from '@/lib/transportDisplay';
 import {
   CALENDAR_TYPES, TRANSPORT_STATUS_TONE, URGENCY_TONE, SHIFT_TYPE_TONE,
 } from '@/lib/constants';
@@ -508,23 +509,82 @@ async function AllEventsView({
 async function TransportView({
   view, rangeStart, rangeEnd, gridDays, monthCursor, selectedKey, selectedDate,
 }: ViewProps) {
-  const transports = await prisma.transportRequest.findMany({
-    where: { pickupBy: { gte: rangeStart, lte: rangeEnd } },
-    include: { volunteer: true },
-    orderBy: { pickupBy: 'asc' },
-  });
-  const byDay = groupByDay(transports, t => t.pickupBy);
+  // PR C: Two queries. Legacy rows (pickupBy set, no stops) come back
+  // from the first query and render as a single block per request, same
+  // as before. New multi-stop rows (pickupBy null, stops != []) come
+  // back from the second query and we synthesize one calendar item per
+  // TransportStop. Both shapes coexist on the same byDay map.
+  const [legacyTransports, stopRows] = await Promise.all([
+    prisma.transportRequest.findMany({
+      where: { pickupBy: { gte: rangeStart, lte: rangeEnd } },
+      include: { volunteer: true },
+      orderBy: { pickupBy: 'asc' },
+    }),
+    prisma.transportStop.findMany({
+      where: { timeStart: { gte: rangeStart, lte: rangeEnd } },
+      include: { request: { include: { volunteer: true } } },
+      orderBy: { timeStart: 'asc' },
+    }),
+  ]);
+
+  // Render-shape: every calendar item is a TransportItem with a `when`
+  // Date (non-null). Legacy = 1 per request; new = 1 per stop.
+  type TransportItem = {
+    id: string;            // requestId or requestId#stopId
+    requestId: string;
+    when: Date;
+    kind: 'legacy' | 'pickup' | 'dropoff';
+    location: string | null;
+    title: string;         // request title or route summary
+    routeSummary: string;  // "A → B" for legacy, "📍 Vet on 12th" for stop
+    request: typeof legacyTransports[number];
+  };
+  const items: TransportItem[] = [];
+  for (const t of legacyTransports) {
+    if (!t.pickupBy) continue; // shouldn't happen for legacy rows, but type-safe
+    items.push({
+      id: t.id,
+      requestId: t.id,
+      when: t.pickupBy,
+      kind: 'legacy',
+      location: null,
+      title: requestTitle(t),
+      routeSummary: summarizeRoute(t, 18),
+      request: t,
+    });
+  }
+  for (const s of stopRows) {
+    if (!s.timeStart) continue;
+    const icon = s.kind === 'pickup' ? '📍' : '🏁';
+    const where = s.location ?? '(location TBD)';
+    items.push({
+      id: `${s.requestId}#${s.id}`,
+      requestId: s.requestId,
+      when: s.timeStart,
+      kind: s.kind === 'dropoff' ? 'dropoff' : 'pickup',
+      location: s.location,
+      title: requestTitle(s.request),
+      routeSummary: `${icon} ${where.slice(0, 18)}`,
+      request: s.request as typeof legacyTransports[number],
+    });
+  }
+  items.sort((a, b) => a.when.getTime() - b.when.getTime());
+  const byDay = groupByDay(items, (it) => it.when);
   const selectedItems = byDay.get(selectedKey) || [];
 
   const allActive = await prisma.transportRequest.findMany({
     where: { status: { in: ['open', 'assigned', 'in_transit'] } },
-    include: { volunteer: true },
-    orderBy: { pickupBy: 'asc' },
+    include: { volunteer: true, stops: true },
+    orderBy: { createdAt: 'asc' },
   });
   const unassigned = allActive.filter(t => !t.volunteerId);
   const pending = allActive.filter(t => t.status === 'open');
   const inTransit = allActive.filter(t => t.status === 'in_transit');
-  const next7 = allActive.filter(t => (daysUntil(t.pickupBy) ?? 99) <= 7);
+  const next7 = allActive.filter(t => {
+    const when = effectivePickupTime(t);
+    if (!when) return false;
+    return (daysUntil(when) ?? 99) <= 7;
+  });
 
   return (
     <>
@@ -540,7 +600,7 @@ async function TransportView({
           view={view}
           monthCursor={monthCursor}
           selectedDate={selectedDate}
-          summary={`${transports.length} transport${transports.length !== 1 ? 's' : ''} ${rangeNoun(view)}`}
+          summary={`${items.length} transport${items.length !== 1 ? 's' : ''} ${rangeNoun(view)}`}
         />
 
         {view === 'month' && (
@@ -551,18 +611,24 @@ async function TransportView({
             tab="transport"
             view={view}
             byDay={byDay}
-            renderItem={t => {
-              const tone = !t.volunteerId
+            renderItem={(it) => {
+              const r = it.request;
+              const tone = !r.volunteerId
                 ? 'bg-red-50 text-red-800'
-                : t.status === 'in_transit'
+                : r.status === 'in_transit'
                 ? 'bg-sky-50 text-sky-800'
-                : t.status === 'delivered'
+                : r.status === 'delivered'
                 ? 'bg-emerald-50 text-emerald-800'
                 : 'bg-yellow-50 text-yellow-800';
+              // PR C: stop-tone overlay so pickups/dropoffs are visually
+              // distinct from legacy rows in dense month/week grids.
+              const stopTone = it.kind === 'pickup' ? 'border-l-2 border-blue-400'
+                : it.kind === 'dropoff' ? 'border-l-2 border-green-500'
+                : '';
               return (
-                <div key={t.id} className={`flex items-center gap-1 text-[10px] md:text-xs leading-tight rounded px-1 py-0.5 truncate ${tone}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${TRANSPORT_STATUS_DOT[t.status] || 'bg-gray-400'}`} />
-                  <span className="truncate">{t.fromAddress.slice(0, 18)} → {t.toAddress.slice(0, 18)}</span>
+                <div key={it.id} className={`flex items-center gap-1 text-[10px] md:text-xs leading-tight rounded px-1 py-0.5 truncate ${tone} ${stopTone}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${TRANSPORT_STATUS_DOT[r.status] || 'bg-gray-400'}`} />
+                  <span className="truncate">{it.routeSummary}</span>
                 </div>
               );
             }}
@@ -577,15 +643,19 @@ async function TransportView({
             view={view}
             monthCursor={monthCursor}
             byDay={byDay}
-            renderItem={t => {
-              const tone = !t.volunteerId ? 'bg-red-50 text-red-800'
-                : t.status === 'in_transit' ? 'bg-sky-50 text-sky-800'
-                : t.status === 'delivered' ? 'bg-emerald-50 text-emerald-800'
+            renderItem={(it) => {
+              const r = it.request;
+              const tone = !r.volunteerId ? 'bg-red-50 text-red-800'
+                : r.status === 'in_transit' ? 'bg-sky-50 text-sky-800'
+                : r.status === 'delivered' ? 'bg-emerald-50 text-emerald-800'
                 : 'bg-yellow-50 text-yellow-800';
+              const stopTone = it.kind === 'pickup' ? 'border-l-2 border-blue-400'
+                : it.kind === 'dropoff' ? 'border-l-2 border-green-500'
+                : '';
               return (
-                <div key={t.id} className={`text-[11px] leading-snug rounded px-1.5 py-1 truncate ${tone}`}>
-                  <div className="font-medium truncate">{t.fromAddress.slice(0, 16)} → {t.toAddress.slice(0, 16)}</div>
-                  <div className="text-[10px] opacity-70">{format(t.pickupBy, 'h:mm a')}{t.volunteer ? ` · ${t.volunteer.name.split(' ')[0]}` : ' · UNASSIGNED'}</div>
+                <div key={it.id} className={`text-[11px] leading-snug rounded px-1.5 py-1 truncate ${tone} ${stopTone}`}>
+                  <div className="font-medium truncate">{it.routeSummary}</div>
+                  <div className="text-[10px] opacity-70">{format(it.when, 'h:mm a')}{r.volunteer ? ` · ${r.volunteer.name.split(' ')[0]}` : ' · UNASSIGNED'}</div>
                 </div>
               );
             }}
@@ -596,23 +666,28 @@ async function TransportView({
           <DayList
             items={selectedItems}
             empty="No transports scheduled for this day."
-            renderItem={t => {
-              const overdue = !['delivered', 'cancelled'].includes(t.status) && isOverdue(t.pickupBy);
+            renderItem={(it) => {
+              const r = it.request;
+              const overdue = !['delivered', 'cancelled'].includes(r.status) && isOverdue(it.when);
               return (
-                <li key={t.id} className="py-2.5">
+                <li key={it.id} className="py-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Pill tone={URGENCY_TONE[t.urgency] || 'gray'}>{t.urgency}</Pill>
-                    <Pill tone={TRANSPORT_STATUS_TONE[t.status] || 'gray'}>{t.status.replace('_', ' ')}</Pill>
-                    {!t.volunteerId && <Pill tone="red">UNASSIGNED</Pill>}
+                    <Pill tone={URGENCY_TONE[r.urgency] || 'gray'}>{r.urgency}</Pill>
+                    <Pill tone={TRANSPORT_STATUS_TONE[r.status] || 'gray'}>{r.status.replace('_', ' ')}</Pill>
+                    {it.kind === 'pickup' && <Pill tone="blue">pickup</Pill>}
+                    {it.kind === 'dropoff' && <Pill tone="green">drop-off</Pill>}
+                    {!r.volunteerId && <Pill tone="red">UNASSIGNED</Pill>}
                     {overdue && <Pill tone="red">overdue</Pill>}
-                    <span className="text-xs text-gray-500 ml-auto">{fmtDateTime(t.pickupBy)}</span>
+                    <span className="text-xs text-gray-500 ml-auto">{fmtDateTime(it.when)}</span>
                   </div>
                   <div className="mt-1 text-sm">
-                    <strong>{t.fromAddress}</strong> → <strong>{t.toAddress}</strong>
+                    <strong>{it.title}</strong>
+                    {it.kind !== 'legacy' && it.location && <> · {it.location}</>}
+                    {it.kind === 'legacy' && <> · {summarizeRoute(r, 32)}</>}
                   </div>
-                  {t.description && <p className="text-sm text-gray-600 mt-0.5">{t.description}</p>}
-                  {t.volunteer && <p className="text-xs text-gray-500 mt-0.5">Driver: <strong>{t.volunteer.name}</strong>{t.volunteer.phone ? ` · ${t.volunteer.phone}` : ''}</p>}
-                  <div className="mt-1"><Link href={`/transport/requests/${t.id}`} className="text-xs text-teal-700 hover:underline">Open transport →</Link></div>
+                  {r.description && <p className="text-sm text-gray-600 mt-0.5">{r.description}</p>}
+                  {r.volunteer && <p className="text-xs text-gray-500 mt-0.5">Driver: <strong>{r.volunteer.name}</strong>{r.volunteer.phone ? ` · ${r.volunteer.phone}` : ''}</p>}
+                  <div className="mt-1"><Link href={`/transport/requests/${it.requestId}`} className="text-xs text-teal-700 hover:underline">Open transport →</Link></div>
                 </li>
               );
             }}
@@ -628,22 +703,27 @@ async function TransportView({
           </div>
           {selectedItems.length === 0 ? <Empty msg="No transports scheduled for this day." /> : (
             <ul className="divide-y divide-gray-100">
-              {selectedItems.map(t => {
-                const overdue = !['delivered', 'cancelled'].includes(t.status) && isOverdue(t.pickupBy);
+              {selectedItems.map((it) => {
+                const r = it.request;
+                const overdue = !['delivered', 'cancelled'].includes(r.status) && isOverdue(it.when);
                 return (
-                  <li key={t.id} className="py-2.5">
+                  <li key={it.id} className="py-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Pill tone={URGENCY_TONE[t.urgency] || 'gray'}>{t.urgency}</Pill>
-                      <Pill tone={TRANSPORT_STATUS_TONE[t.status] || 'gray'}>{t.status.replace('_', ' ')}</Pill>
-                      {!t.volunteerId && <Pill tone="red">UNASSIGNED</Pill>}
+                      <Pill tone={URGENCY_TONE[r.urgency] || 'gray'}>{r.urgency}</Pill>
+                      <Pill tone={TRANSPORT_STATUS_TONE[r.status] || 'gray'}>{r.status.replace('_', ' ')}</Pill>
+                      {it.kind === 'pickup' && <Pill tone="blue">pickup</Pill>}
+                      {it.kind === 'dropoff' && <Pill tone="green">drop-off</Pill>}
+                      {!r.volunteerId && <Pill tone="red">UNASSIGNED</Pill>}
                       {overdue && <Pill tone="red">overdue</Pill>}
-                      <span className="text-xs text-gray-500 ml-auto">{fmtDateTime(t.pickupBy)}</span>
+                      <span className="text-xs text-gray-500 ml-auto">{fmtDateTime(it.when)}</span>
                     </div>
                     <div className="mt-1 text-sm">
-                      <strong>{t.fromAddress}</strong> → <strong>{t.toAddress}</strong>
+                      <strong>{it.title}</strong>
+                      {it.kind !== 'legacy' && it.location && <> · {it.location}</>}
+                      {it.kind === 'legacy' && <> · {summarizeRoute(r, 32)}</>}
                     </div>
-                    {t.description && <p className="text-sm text-gray-600 mt-0.5">{t.description}</p>}
-                    {t.volunteer && <p className="text-xs text-gray-500 mt-0.5">Driver: <strong>{t.volunteer.name}</strong>{t.volunteer.phone ? ` · ${t.volunteer.phone}` : ''}</p>}
+                    {r.description && <p className="text-sm text-gray-600 mt-0.5">{r.description}</p>}
+                    {r.volunteer && <p className="text-xs text-gray-500 mt-0.5">Driver: <strong>{r.volunteer.name}</strong>{r.volunteer.phone ? ` · ${r.volunteer.phone}` : ''}</p>}
                   </li>
                 );
               })}
