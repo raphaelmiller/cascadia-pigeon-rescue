@@ -123,7 +123,11 @@ export default async function TransportPage({
             {allActive.length} active · {unassigned.length} unassigned · {inTransit.length} in transit · {todays.length} today
           </p>
         </div>
-        <Btn href="/calendar?tab=transport" variant="ghost">Full calendar →</Btn>
+        <div className="flex gap-2 flex-wrap">
+          <Btn href="/transport/availability" variant="ghost">Driver availability →</Btn>
+          <Btn href="/transport/shifts" variant="ghost">Shifts →</Btn>
+          <Btn href="/calendar?tab=transport" variant="ghost">Full calendar →</Btn>
+        </div>
       </div>
 
       {/* Today's coverage banner */}

@@ -79,9 +79,12 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
             {driver.maxDistanceMi != null && ` · max ${driver.maxDistanceMi}mi`}
           </p>
         </div>
-        <form action={deleteAction}>
-          <Btn type="submit" variant="danger">⚠ Delete</Btn>
-        </form>
+        <div className="flex gap-2">
+          <Btn href={`/transport/drivers/${id}/availability`} variant="ghost">📅 View availability</Btn>
+          <form action={deleteAction}>
+            <Btn type="submit" variant="danger">⚠ Delete</Btn>
+          </form>
+        </div>
       </div>
 
       <Card>

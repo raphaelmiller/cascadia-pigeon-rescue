@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { H1, H2, Card, Pill, Btn, Empty, Field, inputClass } from '@/components/ui';
 import { fmtDateTime } from '@/lib/utils';
 import { SHIFT_TYPES, SHIFT_TYPE_TONE } from '@/lib/constants';
@@ -88,7 +89,13 @@ export default async function RescuePage() {
 
   return (
     <div className="space-y-4">
-      <H1>Rescue Shifts</H1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <H1>Rescue Shifts</H1>
+        <div className="flex gap-2 flex-wrap">
+          <Btn href="/rescue/availability" variant="ghost">Rescuer availability →</Btn>
+          <Btn href="/rescue/shifts" variant="ghost">Calendar →</Btn>
+        </div>
+      </div>
 
       {/* Today coverage */}
       <Card tone={today.filter(s => s.volunteerId).length === 0 ? 'red' : 'green'}>
@@ -167,6 +174,9 @@ export default async function RescuePage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="font-semibold">{v.name}</div>
                   {v.linkedFoster && <Pill tone="purple">also a foster</Pill>}
+                  <Link href={`/rescue/rescuers/${v.id}/availability`} className="ml-auto text-xs text-teal-700 hover:underline">
+                    availability →
+                  </Link>
                 </div>
                 <div className="text-xs text-gray-500">
                   {v.location || 'location ?'}
