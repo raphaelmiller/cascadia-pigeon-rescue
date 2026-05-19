@@ -6,19 +6,23 @@ import { fmtDate } from '@/lib/utils';
 import { activeBirdWhere } from '@/lib/filters';
 import { SwipeRow } from '@/components/SwipeRow';
 import { getBirdsSnapshots } from '@/lib/birdSnapshot';
+import { StarButton } from '@/components/StarButton';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BirdsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; status?: string; q?: string }>;
+  searchParams: Promise<{ filter?: string; status?: string; q?: string; starred?: string }>;
 }) {
   const params = await searchParams;
   const where: Record<string, unknown> = { ...activeBirdWhere };
   if (params.status && BIRD_STATUSES.includes(params.status as never)) where.status = params.status;
   if (params.filter === 'critical') where.medicalPriority = { in: ['high', 'critical'] };
   if (params.filter === 'needs') where.status = { in: ['needs_intake', 'needs_foster', 'needs_transfer'] };
+  // PR F: filter to only show fully-sorted birds when ?starred=true.
+  const starredFilter = params.starred === 'true';
+  if (starredFilter) where.starred = true;
   if (params.q) {
     where.OR = [
       { name: { contains: params.q } },
@@ -71,8 +75,45 @@ export default async function BirdsPage({
               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
             ))}
           </select>
+          {/* PR F: keep the ?starred query param when submitting the form
+              so toggling search/status doesn't accidentally clear the
+              starred filter. */}
+          {starredFilter && <input type="hidden" name="starred" value="true" />}
           <Btn type="submit" variant="ghost">Apply</Btn>
         </form>
+        {/* PR F: tappable filter chip — "All birds" vs "★ Fully sorted only". */}
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Link
+            href={(() => {
+              const qs = new URLSearchParams();
+              if (params.q) qs.set('q', params.q);
+              if (params.status) qs.set('status', params.status);
+              if (params.filter) qs.set('filter', params.filter);
+              const s = qs.toString();
+              return s ? `/birds?${s}` : '/birds';
+            })()}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+              !starredFilter ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            All birds
+          </Link>
+          <Link
+            href={(() => {
+              const qs = new URLSearchParams();
+              if (params.q) qs.set('q', params.q);
+              if (params.status) qs.set('status', params.status);
+              if (params.filter) qs.set('filter', params.filter);
+              qs.set('starred', 'true');
+              return `/birds?${qs.toString()}`;
+            })()}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+              starredFilter ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <span aria-hidden="true">★</span> Fully sorted only
+          </Link>
+        </div>
       </Card>
 
       {birds.length === 0 ? (
@@ -91,6 +132,13 @@ export default async function BirdsPage({
                 entityName={b.name}
                 className="rounded-2xl"
               >
+                {/* PR F: relative wrapper so the StarButton can sit at
+                    top-right corner of the card without being inside the
+                    Link (which would navigate on tap). */}
+                <div className="relative">
+                  <div className="absolute top-2 right-2 z-10">
+                    <StarButton birdId={b.id} starred={b.starred} size="md" />
+                  </div>
                 <Link href={`/birds/${b.id}`} className="block">
                   <Card className="hover:shadow-md transition cursor-pointer h-full">
                     <div className="flex items-start gap-3">
@@ -169,6 +217,7 @@ export default async function BirdsPage({
                     )}
                   </Card>
                 </Link>
+                </div>
               </SwipeRow>
             );
           })}

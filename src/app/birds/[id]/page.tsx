@@ -12,6 +12,7 @@ import { ConfirmSubmit } from '@/components/ConfirmSubmit';
 import { requireOperator } from '@/lib/auth';
 import { parseForm, birdUpdateSchema } from '@/lib/schemas';
 import { PartialDatePicker } from '@/components/PartialDatePicker';
+import { StarButton } from '@/components/StarButton';
 import { formatPartialDate } from '@/lib/partialDate';
 import { WeightLog } from '@/components/WeightLog';
 
@@ -389,6 +390,8 @@ export default async function BirdDetail({
           <div className="flex items-center gap-3 mt-1">
             <StatusDot tone={STATUS_TONE[bird.status] || 'gray'} size="lg" />
             <H1>{bird.name}</H1>
+            {/* PR F: tappable "fully sorted" star next to the name. */}
+            <StarButton birdId={bird.id} starred={bird.starred} size="lg" />
           </div>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {isDeleted && <Pill tone="red">deleted</Pill>}

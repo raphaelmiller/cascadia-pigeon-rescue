@@ -57,6 +57,12 @@ model Bird {
   feedingStatus    String?  // self / hand / tube / crop
   heatSupport      Boolean  @default(false)
   medicalNotes     String?
+  // PR F (2026-05-18): shared "fully sorted / handled" star. Single
+  // boolean visible to every operator (we have one shared admin login
+  // right now). When per-user accounts arrive, this can become a M2M
+  // table; until then, anyone clicking the star toggles it for the
+  // whole team.
+  starred          Boolean  @default(false)
 
   // Relations
   fosterId   String?
