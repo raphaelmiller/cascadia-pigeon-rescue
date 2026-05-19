@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, Empty, StatusDot, Btn } from '@/components/ui';
 import { fmtDate, fmtDateTime, daysUntil, computeRunout } from '@/lib/utils';
 import { stressTone, URGENCY_TONE, STATUS_LABELS } from '@/lib/constants';
+import { effectivePickupTime, summarizeRoute } from '@/lib/transportDisplay';
 import { activeBirdWhere, activeFosterWhere } from '@/lib/filters';
 
 export const dynamic = 'force-dynamic';
@@ -74,7 +75,13 @@ export default async function DigestPage() {
 
   const lowStock = lowSupplies.filter(s => s.onHand <= s.threshold);
   const burnoutRisk = fosters.filter(f => stressTone(f.currentStress) === 'red' || stressTone(f.currentStress) === 'orange');
-  const transportNext48 = openTransport.filter(t => (daysUntil(t.pickupBy) ?? 99) <= 2);
+  // PR C: TransportRequest fields are now nullable for multi-stop rows.
+  // Use the helpers so legacy + new shapes both work.
+  const transportNext48 = openTransport.filter(t => {
+    const when = effectivePickupTime(t);
+    if (!when) return false;
+    return (daysUntil(when) ?? 99) <= 2;
+  });
 
   return (
     <div className="space-y-4">
@@ -150,8 +157,8 @@ export default async function DigestPage() {
               {transportNext48.map(t => (
                 <li key={t.id} className="py-2 flex items-center gap-2">
                   <Pill tone={URGENCY_TONE[t.urgency] || 'gray'}>{t.urgency}</Pill>
-                  <span className="text-sm flex-1 truncate">{t.fromAddress} → {t.toAddress}</span>
-                  <span className="text-xs text-gray-500">{fmtDateTime(t.pickupBy)}</span>
+                  <span className="text-sm flex-1 truncate">{summarizeRoute(t, 24)}</span>
+                  <span className="text-xs text-gray-500">{(() => { const when = effectivePickupTime(t); return when ? fmtDateTime(when) : 'time TBD'; })()}</span>
                   <span className="text-xs">{t.volunteer?.name || <span className="text-orange-700">unassigned</span>}</span>
                 </li>
               ))}
