@@ -119,7 +119,12 @@ export function ScheduleBlockModal({
     }
   }, [state.open, state.id, state.rrule, state.startsAt, state.endsAt]);
 
-  if (!state.open) return null;
+  // PR E (2026-05-18): early-return MOVED below the useMemo on line ~180.
+  // It was here originally and caused React error #310 ("Rendered fewer
+  // hooks than during the previous render") because the useMemo only ran
+  // when the modal was open, so the hook count changed across renders.
+  // Hooks must always be called in the same order — the early return
+  // now lives right above the JSX, after every hook has executed.
 
   const submit = (override: boolean) => {
     setError(null);
@@ -208,6 +213,10 @@ export function ScheduleBlockModal({
     }
     return out;
   }, [preset, start]);
+
+  // Now safe — all hooks above this line run on every render regardless
+  // of `state.open`. See PR E note above.
+  if (!state.open) return null;
 
   return (
     <div
