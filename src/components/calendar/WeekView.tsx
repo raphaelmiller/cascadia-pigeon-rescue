@@ -217,13 +217,25 @@ export function WeekView({
             {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
           </span>
         </div>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 hidden sm:block">
           Click + drag an empty slot to create
+        </div>
+        <div className="text-xs text-gray-500 sm:hidden">
+          Tap &ldquo;+ block&rdquo; on a day to add one
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
+      {/* Mobile day-list (<640px). Replaces the week-grid because dragging
+          a 7-column hour-grid on a phone screen is unusable; PR E. */}
+      <MobileDayList
+        days={days}
+        events={events}
+        onCreate={onCreate}
+        onEdit={onEdit}
+      />
+
+      {/* Desktop week-grid (>=640px). Keeps the drag-to-create UX. */}
+      <div className="hidden sm:block overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
         <div className="min-w-[760px]">
           {/* Day headers */}
           <div className="grid"
@@ -357,6 +369,101 @@ export function WeekView({
           🔁 Recurring instance
         </span>
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// MobileDayList — the mobile (<640px) replacement for the week-grid.
+// Renders a vertical scroll of days with each day's events stacked
+// underneath. Each day gets a "+ Add block" button that opens the same
+// modal the desktop drag-to-create flow does (we synthesize a default
+// 9:00–10:00 AM slot on tap).
+//
+// Rationale: a 7-column hour-grid on a 375px-wide phone screen is
+// unusable — horizontal scroll hides 4 of 7 days and there's no
+// affordance. Day-list is a better mobile pattern (Google Calendar
+// uses the same approach).
+// =====================================================================
+function MobileDayList({
+  days,
+  events,
+  onCreate,
+  onEdit,
+}: {
+  days: Date[];
+  events: WeekEvent[];
+  onCreate?: (start: Date, end: Date) => void;
+  onEdit?: (occurrenceId: string) => void;
+}) {
+  return (
+    <div className="sm:hidden space-y-2">
+      {days.map((day) => {
+        const dayEvents = events
+          .filter((ev) => isSameDay(ev.startsAt, day))
+          .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+        const today = isToday(day);
+        return (
+          <div
+            key={day.toISOString()}
+            className={`rounded-lg border ${today ? 'border-teal-300 bg-teal-50/40' : 'border-gray-200 bg-white'} p-3`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className={`text-sm font-semibold ${today ? 'text-teal-800' : 'text-gray-700'}`}>
+                {format(day, 'EEE, MMM d')}
+                {today && <span className="ml-2 text-[10px] font-medium uppercase tracking-wide">Today</span>}
+              </div>
+              {onCreate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Synthesize a default 1-hour block at 9 AM local for this day.
+                    const start = new Date(day);
+                    start.setHours(9, 0, 0, 0);
+                    const end = new Date(start.getTime() + 60 * 60 * 1000);
+                    onCreate(start, end);
+                  }}
+                  className="rounded-md bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-2 py-1"
+                >
+                  + Add block
+                </button>
+              )}
+            </div>
+            {dayEvents.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">Nothing scheduled.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {dayEvents.map((ev) => {
+                  const isAvail = ev.variant === 'availability';
+                  const cls = isAvail
+                    ? 'bg-emerald-50 ring-emerald-200 text-emerald-900'
+                    : 'bg-sky-100 ring-sky-300 text-sky-900';
+                  const conflictRing = ev.hasConflict ? ' ring-2 ring-red-500' : ' ring-1';
+                  return (
+                    <li key={ev.occurrenceId}>
+                      <button
+                        type="button"
+                        onClick={() => onEdit?.(ev.occurrenceId)}
+                        className={`w-full text-left rounded-md px-2.5 py-2 ${cls}${conflictRing}`}
+                      >
+                        <div className="flex items-center gap-1.5 text-sm font-semibold">
+                          {ev.isRecurringInstance && <span title="Recurring">🔁</span>}
+                          {ev.hasConflict && <span title="Conflict">⚠</span>}
+                          <span className="truncate">{ev.title}</span>
+                        </div>
+                        <div className="text-xs opacity-80 mt-0.5">
+                          {format(ev.startsAt, 'h:mm a')} – {format(ev.endsAt, 'h:mm a')}
+                          {ev.subtitle && <span> · {ev.subtitle}</span>}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

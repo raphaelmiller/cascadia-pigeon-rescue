@@ -314,8 +314,14 @@ function ViewLink({ view, current, dateISO, children }: { view: ViewMode; curren
 }
 
 // ---------- DAY VIEW (hour timeline) ----------
+// PR E: requests is typed any[] so the compiler can't catch null pickupBy.
+// Filter to rows with a usable time and stash the resolved Date on a
+// `__when` key so we don't call effectivePickupTime() in every render.
 function DayView({ cursor, requests }: { cursor: Date; requests: any[] }) {
-  const dayItems = requests.filter(r => isSameDay(r.pickupBy, cursor));
+  const requestsWithWhen = requests
+    .map(r => ({ ...r, __when: effectivePickupTime(r) }))
+    .filter(r => r.__when !== null) as Array<typeof requests[number] & { __when: Date }>;
+  const dayItems = requestsWithWhen.filter(r => isSameDay(r.__when, cursor));
   const hours = Array.from({ length: 18 }, (_, i) => i + 5); // 5am – 10pm
   return (
     <div>
@@ -324,7 +330,7 @@ function DayView({ cursor, requests }: { cursor: Date; requests: any[] }) {
       ) : (
         <div className="grid grid-cols-[60px_1fr] gap-px bg-gray-100 rounded-lg overflow-hidden text-sm">
           {hours.map(h => {
-            const slotItems = dayItems.filter(r => r.pickupBy.getHours() === h);
+            const slotItems = dayItems.filter(r => r.__when.getHours() === h);
             return (
               <>
                 <div key={`l-${h}`} className="bg-white px-2 py-2 text-xs text-gray-500 text-right">
@@ -348,8 +354,8 @@ function DayView({ cursor, requests }: { cursor: Date; requests: any[] }) {
                                 : '#fefce8',
                             }}>
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="font-medium truncate">{r.fromAddress} → {r.toAddress}</span>
-                              <span className="text-[10px] text-gray-500">{format(r.pickupBy, 'h:mm a')}</span>
+                              <span className="font-medium truncate">{summarizeRoute(r, 18)}</span>
+                              <span className="text-[10px] text-gray-500">{format(r.__when, 'h:mm a')}</span>
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {r.volunteer ? r.volunteer.name : <span className="text-red-700 font-semibold">UNASSIGNED</span>}
@@ -374,10 +380,13 @@ function DayView({ cursor, requests }: { cursor: Date; requests: any[] }) {
 function WeekView({ cursor, requests }: { cursor: Date; requests: any[] }) {
   const start = startOfWeek(cursor, { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start, end: endOfWeek(cursor, { weekStartsOn: 0 }) });
+  const requestsWithWhen = requests
+    .map(r => ({ ...r, __when: effectivePickupTime(r) }))
+    .filter(r => r.__when !== null) as Array<typeof requests[number] & { __when: Date }>;
   return (
     <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-lg overflow-hidden">
       {days.map(d => {
-        const dayItems = requests.filter(r => isSameDay(r.pickupBy, d));
+        const dayItems = requestsWithWhen.filter(r => isSameDay(r.__when, d));
         const today_ = isToday(d);
         return (
           <div key={d.toISOString()} className="bg-white p-2 min-h-32 flex flex-col">
@@ -399,7 +408,7 @@ function WeekView({ cursor, requests }: { cursor: Date; requests: any[] }) {
                   }`}>
                     <div className="flex items-center justify-between gap-1">
                       <span className="truncate">{r.volunteer?.name ?? 'OPEN'}</span>
-                      <span className="opacity-70 flex-shrink-0">{format(r.pickupBy, 'h:mm a')}</span>
+                      <span className="opacity-70 flex-shrink-0">{format(r.__when, 'h:mm a')}</span>
                     </div>
                   </div>
                 </Link>
@@ -425,7 +434,10 @@ function MonthView({ cursor, requests }: { cursor: Date; requests: any[] }) {
       </div>
       <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-b-lg overflow-hidden">
         {days.map(d => {
-          const dayItems = requests.filter(r => isSameDay(r.pickupBy, d));
+          const dayItems = requests
+            .map(r => ({ ...r, __when: effectivePickupTime(r) }))
+            .filter(r => r.__when !== null)
+            .filter(r => isSameDay(r.__when, d));
           const inMonth = isSameMonth(d, cursor);
           const today_ = isToday(d);
           return (

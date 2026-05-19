@@ -13,7 +13,7 @@ export default async function Dashboard() {
   const in7d = new Date(now.getTime() + 7 * 86400000);
   const [
     birds, fosters, openRequests, meds, upcomingEvents,
-    transport, openShifts, lowStock, bandagesSoon,
+    transport, openShifts, lowStock, bandagesSoon, rescueCases,
   ] = await Promise.all([
     prisma.bird.findMany({ where: activeBirdWhere, include: { foster: true } }),
     prisma.foster.findMany({ where: activeFosterWhere }),
@@ -48,6 +48,13 @@ export default async function Dashboard() {
       include: { bird: true },
       orderBy: { nextDueAt: 'asc' },
     }),
+    // PR E: surface active needs_rescue cases at the top of the dash.
+    prisma.rescueCase.findMany({
+      where: { status: 'needs_rescue', archivedAt: null, deletedAt: null },
+      include: { assignedVolunteer: true, photos: { take: 1, orderBy: { createdAt: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
   ]);
 
   const needFoster = birds.filter(b => ['needs_intake', 'needs_foster', 'needs_transfer'].includes(b.status));
@@ -79,6 +86,57 @@ export default async function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* PR E: Active rescue cases. Top of the dash because a bird in
+          the field is the most time-sensitive thing on the app. */}
+      {rescueCases.length > 0 && (
+        <Card tone="red">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-2">
+              <Siren size={20} className="text-red-600" />
+              <H2>
+                Birds needing rescue ({rescueCases.length})
+              </H2>
+            </div>
+            <Btn href="/rescue/cases?status=needs_rescue" variant="primary">View all →</Btn>
+          </div>
+          <ul className="divide-y divide-red-100">
+            {rescueCases.map((c) => {
+              const headline = c.birdDescription || c.issue || 'Unidentified bird';
+              return (
+                <li key={c.id} className="py-2.5">
+                  <Link href={`/rescue/cases/${c.id}`} className="flex items-start gap-3 hover:bg-red-50/40 -mx-2 px-2 py-1 rounded">
+                    {c.photos[0]?.url && (
+                      <div className="flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.photos[0].url} alt="" className="h-12 w-12 rounded object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate">{headline}</div>
+                      {c.issue && c.birdDescription && (
+                        <div className="text-xs text-gray-700 truncate">{c.issue}</div>
+                      )}
+                      {c.location && (
+                        <div className="text-xs text-gray-500 truncate">📍 {c.location}</div>
+                      )}
+                      <div className="mt-0.5 flex items-center gap-2 flex-wrap text-[11px] text-gray-500">
+                        <span>Called in {fmtRelative(c.dateCalledIn)}</span>
+                        {c.assignedVolunteer && (
+                          <span>· Rescuer: <strong className="text-gray-700">{c.assignedVolunteer.name}</strong></span>
+                        )}
+                        {!c.assignedVolunteer && (
+                          <span className="text-red-600 font-medium">· needs rescuer</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       {/* Top urgents */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
