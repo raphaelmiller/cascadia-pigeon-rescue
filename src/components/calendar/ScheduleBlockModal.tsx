@@ -162,9 +162,10 @@ export function ScheduleBlockModal({
         setError(res.error);
         return;
       }
-      if (res.warnings && res.warnings.length > 0) {
-        setWarnings(res.warnings);
-        return;
+      if (res.warnings && res.warnings.length > 0 && !override) {
+        // Show warnings as a non-blocking toast
+        const overlappingItems = res.warnings.join(', ');
+        alert(`Heads up: this overlaps with ${overlappingItems}`);
       }
       onClose();
     });
@@ -380,32 +381,7 @@ export function ScheduleBlockModal({
             />
           </label>
 
-          {/* Warnings surface */}
-          {warnings.length > 0 && (
-            <div className="rounded-lg bg-amber-50 ring-1 ring-amber-300 px-3 py-2 text-sm text-amber-900">
-              <div className="font-semibold mb-1">⚠ Heads up</div>
-              <ul className="list-disc pl-4 space-y-0.5 text-xs">
-                {warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
-              <div className="mt-2 flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => submit(true)}
-                  disabled={pending}
-                  className="rounded-md bg-amber-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-amber-700"
-                >
-                  Save anyway
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWarnings([])}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Choose different time
-                </button>
-              </div>
-            </div>
-          )}
+          {/* PR G: Warnings are now non-blocking toasts, so no UI needed here */}
 
           {error && (
             <div className="rounded-lg bg-red-50 ring-1 ring-red-300 px-3 py-2 text-sm text-red-800">
@@ -436,7 +412,7 @@ export function ScheduleBlockModal({
               </button>
               <button
                 type="submit"
-                disabled={pending || warnings.length > 0}
+                disabled={pending}
                 className="rounded-md bg-teal-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-teal-700 disabled:opacity-60"
               >
                 {pending ? 'Saving…' : isEdit ? 'Save changes' : 'Create'}

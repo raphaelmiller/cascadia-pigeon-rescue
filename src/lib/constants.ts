@@ -375,3 +375,36 @@ export const RESCUE_CASE_STATUS_TONE: Record<string, string> = {
   escaped_flew_away: 'yellow',
   closed_unable: 'gray',
 };
+
+// PR G (2026-05-19) — Current Whereabouts categories.
+// Logged as entries in WhereaboutsLogEntry; latest entry wins.
+// "Current whereabouts" derivation in src/lib/whereabouts.ts falls back
+// to Bird.status when no log entries exist (avoids backfill).
+export const WHEREABOUTS_CATEGORIES = [
+  'adopted',
+  'in_foster_care',
+  'at_sanctuary',
+  'at_wildlife_center',
+  'deceased',
+  'other',
+] as const;
+export type WhereaboutsCategory = typeof WHEREABOUTS_CATEGORIES[number];
+
+export const WHEREABOUTS_LABELS: Record<string, string> = {
+  adopted: 'Adopted',
+  in_foster_care: 'In foster care',
+  at_sanctuary: 'At a sanctuary',
+  at_wildlife_center: 'At a wildlife center',
+  deceased: 'Deceased',
+  other: 'Other',
+};
+
+// UI tone hint (matches the Card/Badge tone vocabulary used elsewhere).
+export const WHEREABOUTS_TONE: Record<string, string> = {
+  adopted: 'green',
+  in_foster_care: 'blue',
+  at_sanctuary: 'purple',
+  at_wildlife_center: 'orange',
+  deceased: 'gray',
+  other: 'gray',
+};

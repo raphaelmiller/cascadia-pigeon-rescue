@@ -13,97 +13,145 @@ datasource db {
 // BIRDS
 // ========================================================================
 model Bird {
-  id              String   @id @default(cuid())
-  name            String
-  species         String?  // pigeon, dove, etc.
-  breed           String?
-  age             String?  // free-text: hatchling / juvenile / adult / 3 mo / etc.
-  sex             String?  // M / F / Unknown
-  weightGrams     Float?
-  bandInfo        String?
-  intakeDate      DateTime @default(now())
+  id                    String    @id @default(cuid())
+  name                  String
+  species               String? // pigeon, dove, etc.
+  breed                 String?
+  age                   String? // free-text: hatchling / juvenile / adult / 3 mo / etc.
+  sex                   String? // M / F / Unknown
+  weightGrams           Float?
+  bandInfo              String?
+  intakeDate            DateTime  @default(now())
   // Date the bird was found (separate from intake). Partial-date triple:
   // Year required, Month + Day optional, so callers can say
   // "2024" or "March 2024" or "March 15, 2024".
-  foundDateYear   Int?
-  foundDateMonth  Int?  // 1..12 when present
-  foundDateDay    Int?  // 1..31 when present
-  foundLocation   String?
-  finderName      String?
-  finderContact   String?
-  status          String   @default("needs_intake") // see lib/constants
-  placementNeed   String?  // urgent_foster / quarantine / medical / etc.
-  medicalPriority String   @default("none")          // none / low / medium / high / critical
+  foundDateYear         Int?
+  foundDateMonth        Int? // 1..12 when present
+  foundDateDay          Int? // 1..31 when present
+  foundLocation         String?
+  finderName            String?
+  finderContact         String?
+  status                String    @default("needs_intake") // see lib/constants
+  placementNeed         String? // urgent_foster / quarantine / medical / etc.
+  medicalPriority       String    @default("none") // none / low / medium / high / critical
   // Quarantine + integration tracking (replaces the old `quarantine` status).
   // A bird can be quarantined while also having any clinical status, so the
   // state lives on its own boolean instead of conflating two axes in `status`.
-  currentlyQuarantined  Boolean @default(false)
-  clearedForIntegration Boolean @default(false)
+  currentlyQuarantined  Boolean   @default(false)
+  clearedForIntegration Boolean   @default(false)
   // Projected date the bird is expected to clear quarantine. Same partial-date
   // triple pattern as foundDate* (year required, month + day optional).
   projectedClearedYear  Int?
-  projectedClearedMonth Int?  // 1..12 when present
-  projectedClearedDay   Int?  // 1..31 when present
-  dietNotes       String?
-  behaviorNotes   String?
-  specialHandling String?
-  outcome         String?
+  projectedClearedMonth Int? // 1..12 when present
+  projectedClearedDay   Int? // 1..31 when present
+  dietNotes             String?
+  behaviorNotes         String?
+  specialHandling       String?
+  outcome               String?
   // Soft-delete / archive
-  archivedAt      DateTime?
-  deletedAt       DateTime?
+  archivedAt            DateTime?
+  deletedAt             DateTime?
   // Medical
-  primaryDiagnosis String?
-  contagionRisk    String?  // none / low / medium / high
-  feedingStatus    String?  // self / hand / tube / crop
-  heatSupport      Boolean  @default(false)
-  medicalNotes     String?
+  primaryDiagnosis      String?
+  contagionRisk         String? // none / low / medium / high
+  feedingStatus         String? // self / hand / tube / crop
+  heatSupport           Boolean   @default(false)
+  medicalNotes          String?
   // PR F (2026-05-18): shared "fully sorted / handled" star. Single
   // boolean visible to every operator (we have one shared admin login
   // right now). When per-user accounts arrive, this can become a M2M
   // table; until then, anyone clicking the star toggles it for the
   // whole team.
-  starred          Boolean  @default(false)
+  starred               Boolean   @default(false)
+
+  // PR G (2026-05-19) — intake metadata flags.
+  // Independent of foundLocation/finderName/finderContact (which stay
+  // visible regardless). A bird can be born-in-captivity AND have a
+  // "where it came from" address (the breeder, the surrendering owner,
+  // etc.), so we keep all fields and let the operator fill what applies.
+  bornInCaptivity Boolean @default(false)
+  ownerSurrender  Boolean @default(false)
+
+  // PR G — freeform backstory. Soft hint ~2000 chars, hard cap 10000
+  // enforced in src/lib/schemas.ts. Plain text for now (no markdown),
+  // can upgrade later if Christina wants formatting.
+  backstory String?
 
   // Relations
-  fosterId   String?
-  foster     Foster?    @relation(fields: [fosterId], references: [id])
-  placements Placement[]
-  medications Medication[]
-  requests   Request[]
-  dailyUpdates DailyUpdate[]
-  photos     Photo[]
-  calendarEvents CalendarEvent[]
-  vetVisits  VetVisit[]
-  caseNotes  CaseNote[]
-  bandageTasks BandageTask[]
-  transports TransportRequest[]
-  transportRequestLinks  TransportRequestBird[]
-  transportStopLinks     TransportStopBird[]
-  rescuedFromCases  RescueCase[]  // PR D: cases where this bird was the rescue subject
-  weightLog  WeightEntry[]
+  fosterId              String?
+  foster                Foster?                @relation(fields: [fosterId], references: [id])
+  placements            Placement[]
+  medications           Medication[]
+  requests              Request[]
+  dailyUpdates          DailyUpdate[]
+  photos                Photo[]
+  calendarEvents        CalendarEvent[]
+  vetVisits             VetVisit[]
+  caseNotes             CaseNote[]
+  bandageTasks          BandageTask[]
+  transports            TransportRequest[]
+  transportRequestLinks TransportRequestBird[]
+  transportStopLinks    TransportStopBird[]
+  rescuedFromCases      RescueCase[] // PR D: cases where this bird was the rescue subject
+  weightLog             WeightEntry[]
+  whereaboutsLog        WhereaboutsLogEntry[] // PR G: append-only log of placements/moves
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// PR G (2026-05-19) — Current Whereabouts log.
+//
+// Append-only log of placements. The "current whereabouts" is computed
+// from the most recent entry (highest recordedAt).
+//
+// The summary displayed on the bird list is DERIVED — from the latest
+// log entry if any exist, else falls back to the Bird.status field so
+// we don't need to backfill historical birds with a synthetic entry.
+// See src/lib/whereabouts.ts for the derivation rules.
+//
+// Edit/delete on log entries is supported (in case of typo) but the
+// model is intended to be append-mostly so we can answer "where was
+// this bird on 2026-04-12?" by walking the log.
+model WhereaboutsLogEntry {
+  id         String   @id @default(cuid())
+  birdId     String
+  bird       Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  // One of: adopted | in_foster_care | at_sanctuary | at_wildlife_center |
+  //         deceased | other
+  // Validated by WHEREABOUTS_CATEGORIES in src/lib/constants.ts.
+  category   String
+  notes      String?
+  // When this placement BEGAN. Defaults to creation time but can be
+  // back-dated by the operator when logging history.
+  recordedAt DateTime @default(now())
+  // Who logged it (free-text for now; single shared admin login).
+  recordedBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([birdId, recordedAt])
 }
 
 // ========================================================================
 // FOSTERS
 // ========================================================================
 model Foster {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   name            String
   phone           String?
   email           String?
   address         String?
-  photoUrl        String?  // profile photo (path under /uploads/fosters/...)
-  capacity        Int      @default(0)
-  medicalSkill    String   @default("beginner") // rehab proficiency: beginner / intermediate / advanced
+  photoUrl        String? // profile photo (path under /uploads/fosters/...)
+  capacity        Int     @default(0)
+  medicalSkill    String  @default("beginner") // rehab proficiency: beginner / intermediate / advanced
   // Date this foster joined the rescue. Partial-date triple
   // (year required, month + day optional). See Bird.foundDate*.
   joinedDateYear  Int?
-  joinedDateMonth Int?  // 1..12 when present
-  joinedDateDay   Int?  // 1..31 when present
-  longTermAble    Boolean  @default(false)
+  joinedDateMonth Int? // 1..12 when present
+  joinedDateDay   Int? // 1..31 when present
+  longTermAble    Boolean @default(false)
   notes           String?
 
   // Transport ability (separate section per Rafa)
@@ -111,45 +159,45 @@ model Foster {
 
   // Rehab skills checklist (17 items — score = number checked / 17)
   // The first three map to legacy fields so existing data is preserved.
-  skillEnrichment       Boolean @default(false)
-  skillOralMeds         Boolean @default(false)
-  skillSyringeFeed      Boolean @default(false)
-  skillTubeFeed         Boolean @default(false)  // was tubeFeedingSkill
-  skillQuarantine       Boolean @default(false)  // was quarantineAble (renamed)
-  skillWoundCare        Boolean @default(false)  // was woundCareSkill
-  skillNeonates         Boolean @default(false)  // was neonateSkill
-  skillFootBandages     Boolean @default(false)
-  skillBoots            Boolean @default(false)
-  skillWingWraps        Boolean @default(false)
-  skillSubqFluids       Boolean @default(false)
-  skillIMInjections     Boolean @default(false)
-  skillCompoundMeds     Boolean @default(false)
-  skillCropSwabsFecals  Boolean @default(false)
-  skillCropFlushes      Boolean @default(false)
-  skillCageTime         Boolean @default(false)
-  skillBirdLights       Boolean @default(false)
-  skillSupplements      Boolean @default(false)
+  skillEnrichment      Boolean @default(false)
+  skillOralMeds        Boolean @default(false)
+  skillSyringeFeed     Boolean @default(false)
+  skillTubeFeed        Boolean @default(false) // was tubeFeedingSkill
+  skillQuarantine      Boolean @default(false) // was quarantineAble (renamed)
+  skillWoundCare       Boolean @default(false) // was woundCareSkill
+  skillNeonates        Boolean @default(false) // was neonateSkill
+  skillFootBandages    Boolean @default(false)
+  skillBoots           Boolean @default(false)
+  skillWingWraps       Boolean @default(false)
+  skillSubqFluids      Boolean @default(false)
+  skillIMInjections    Boolean @default(false)
+  skillCompoundMeds    Boolean @default(false)
+  skillCropSwabsFecals Boolean @default(false)
+  skillCropFlushes     Boolean @default(false)
+  skillCageTime        Boolean @default(false)
+  skillBirdLights      Boolean @default(false)
+  skillSupplements     Boolean @default(false)
   // Critical-care additions (added with the tiered rubric)
-  skillMedKnowledge     Boolean @default(false)  // common pigeon meds + safe admin
-  skillEmaciationCare   Boolean @default(false)  // refeeding safety, rehab, crop mon
+  skillMedKnowledge    Boolean @default(false) // common pigeon meds + safe admin
+  skillEmaciationCare  Boolean @default(false) // refeeding safety, rehab, crop mon
 
   // Live state
-  whiteboardNote  String?  // persistent urgent standing concern
-  currentStress   Int      @default(1) // 1..10 (last logged); convenience copy
+  whiteboardNote String? // persistent urgent standing concern
+  currentStress  Int     @default(1) // 1..10 (last logged); convenience copy
 
   // Soft-delete / archive
-  archivedAt      DateTime?
-  deletedAt       DateTime?
+  archivedAt DateTime?
+  deletedAt  DateTime?
 
-  birds       Bird[]
-  placements  Placement[]
-  wellness    WellnessLog[]
-  requests    Request[]
+  birds        Bird[]
+  placements   Placement[]
+  wellness     WellnessLog[]
+  requests     Request[]
   dailyUpdates DailyUpdate[]
 
   // Reverse cross-links — a foster can also drive and/or rescue.
-  driverProfile   TransportVolunteer? @relation("FosterAsDriver")
-  rescuerProfile  RescueVolunteer?    @relation("FosterAsRescuer")
+  driverProfile  TransportVolunteer? @relation("FosterAsDriver")
+  rescuerProfile RescueVolunteer?    @relation("FosterAsRescuer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -159,19 +207,19 @@ model Foster {
 // PLACEMENTS
 // ========================================================================
 model Placement {
-  id         String    @id @default(cuid())
-  birdId     String
-  bird       Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  fosterId   String
-  foster     Foster    @relation(fields: [fosterId], references: [id], onDelete: Cascade)
-  startDate  DateTime  @default(now())
-  endDate    DateTime?
-  reason     String?   // initial / transfer / quarantine / medical / etc.
-  transferReason String?
+  id               String    @id @default(cuid())
+  birdId           String
+  bird             Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  fosterId         String
+  foster           Foster    @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  startDate        DateTime  @default(now())
+  endDate          DateTime?
+  reason           String? // initial / transfer / quarantine / medical / etc.
+  transferReason   String?
   transportDetails String?
-  suppliesSent String?
-  notes      String?
-  status     String    @default("active") // active / ended
+  suppliesSent     String?
+  notes            String?
+  status           String    @default("active") // active / ended
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -181,28 +229,28 @@ model Placement {
 // MEDICATIONS
 // ========================================================================
 model Medication {
-  id            String   @id @default(cuid())
-  birdId        String
-  bird          Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  name          String
-  dose          String?
+  id              String    @id @default(cuid())
+  birdId          String
+  bird            Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  name            String
+  dose            String?
   // Units the dose is expressed in (mg / ml / drops / tablets / capsules
   // / IU / mcg). Free-text so Christina can type something we haven't
   // seen, but the form datalist suggests the common set + anything in
   // MedicationCatalog.defaultUnits.
-  units         String?
-  concentration String?
-  route         String?  // PO / SC / IM / topical / nebulized
-  frequency     String?  // once daily, BID, TID, etc.
-  startDate     DateTime @default(now())
-  stopDate      DateTime?
-  reassessDate  DateTime?
+  units           String?
+  concentration   String?
+  route           String? // PO / SC / IM / topical / nebulized
+  frequency       String? // once daily, BID, TID, etc.
+  startDate       DateTime  @default(now())
+  stopDate        DateTime?
+  reassessDate    DateTime?
   amountDispensed Float?
-  daysSupplied   Int?
-  expectedRunOut DateTime?
-  refillPrepared Boolean  @default(false)
-  refillDelivered Boolean @default(false)
-  notes          String?
+  daysSupplied    Int?
+  expectedRunOut  DateTime?
+  refillPrepared  Boolean   @default(false)
+  refillDelivered Boolean   @default(false)
+  notes           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -215,13 +263,13 @@ model Medication {
 // Bird.weightGrams is kept as a denormalised "latest weight" cache so
 // existing list views and dashboards keep working without a join.
 model WeightEntry {
-  id          String   @id @default(cuid())
-  birdId      String
-  bird        Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  grams       Float
-  measuredAt  DateTime @default(now())
-  notes       String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  birdId     String
+  bird       Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  grams      Float
+  measuredAt DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
 
   @@index([birdId, measuredAt])
 }
@@ -230,16 +278,16 @@ model WeightEntry {
 // FOSTER WELLNESS LOG
 // ========================================================================
 model WellnessLog {
-  id           String   @id @default(cuid())
-  fosterId     String
-  foster       Foster   @relation(fields: [fosterId], references: [id], onDelete: Cascade)
-  stressLevel  Int      // 1..10
+  id                 String  @id @default(cuid())
+  fosterId           String
+  foster             Foster  @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  stressLevel        Int // 1..10
   capacityConfidence Int? // 1..10
-  needsRehome  Boolean  @default(false)
-  needsSupplies Boolean @default(false)
-  needsLeadership Boolean @default(false)
-  burnoutWarning Boolean @default(false)
-  notes        String?
+  needsRehome        Boolean @default(false)
+  needsSupplies      Boolean @default(false)
+  needsLeadership    Boolean @default(false)
+  burnoutWarning     Boolean @default(false)
+  notes              String?
 
   createdAt DateTime @default(now())
 }
@@ -248,15 +296,15 @@ model WellnessLog {
 // REQUESTS (foster portal)
 // ========================================================================
 model Request {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   fosterId    String
-  foster      Foster    @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  foster      Foster  @relation(fields: [fosterId], references: [id], onDelete: Cascade)
   birdId      String?
-  bird        Bird?     @relation(fields: [birdId], references: [id])
-  type        String    // supply / medication / bandage / transport / vet / food / equipment / other
-  urgency     String    @default("normal") // low / normal / high / urgent
+  bird        Bird?   @relation(fields: [birdId], references: [id])
+  type        String // supply / medication / bandage / transport / vet / food / equipment / other
+  urgency     String  @default("normal") // low / normal / high / urgent
   description String
-  status      String    @default("open") // open / in_progress / resolved / closed
+  status      String  @default("open") // open / in_progress / resolved / closed
   assignedTo  String?
   resolution  String?
 
@@ -268,22 +316,22 @@ model Request {
 // DAILY FOSTER UPDATES
 // ========================================================================
 model DailyUpdate {
-  id            String   @id @default(cuid())
-  birdId        String
-  bird          Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  fosterId      String
-  foster        Foster   @relation(fields: [fosterId], references: [id], onDelete: Cascade)
-  healthStatus  String?
-  eatingDrinking String?
-  poopQuality   String?
-  energyLevel   String?
+  id               String  @id @default(cuid())
+  birdId           String
+  bird             Bird    @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  fosterId         String
+  foster           Foster  @relation(fields: [fosterId], references: [id], onDelete: Cascade)
+  healthStatus     String?
+  eatingDrinking   String?
+  poopQuality      String?
+  energyLevel      String?
   medsAdministered String?
-  stressLevel   Int?
-  concerns      String?
+  stressLevel      Int?
+  concerns         String?
   whiteboardUpdate String?
-  notes         String?
+  notes            String?
 
-  photos        DailyUpdatePhoto[]
+  photos DailyUpdatePhoto[]
 
   createdAt DateTime @default(now())
 }
@@ -298,7 +346,7 @@ model Photo {
   url          String
   caption      String?
   // Categorization: general gallery, health record, vet paperwork
-  category     String   @default("general")  // general | health | vet
+  category     String   @default("general") // general | health | vet
   // Treats this as the bird's profile photo when true (one per bird)
   isProfile    Boolean  @default(false)
   // Optional notes (used heavily by health + vet entries)
@@ -307,7 +355,7 @@ model Photo {
   originalName String?
   mimeType     String?
   // Marker for uploads that aren't images (e.g. PDFs in vet paperwork)
-  kind         String   @default("image")    // image | document
+  kind         String   @default("image") // image | document
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -328,11 +376,11 @@ model DailyUpdatePhoto {
 // CASE NOTES
 // ========================================================================
 model CaseNote {
-  id      String   @id @default(cuid())
-  birdId  String
-  bird    Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  author  String?
-  body    String
+  id        String   @id @default(cuid())
+  birdId    String
+  bird      Bird     @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  author    String?
+  body      String
   createdAt DateTime @default(now())
 }
 
@@ -340,15 +388,15 @@ model CaseNote {
 // CALENDAR
 // ========================================================================
 model CalendarEvent {
-  id        String    @id @default(cuid())
-  title     String
-  type      String    // vet / bandage / med_start / med_stop / med_reassess / refill / supply / transfer / adoption / followup
-  startsAt  DateTime
-  endsAt    DateTime?
-  birdId    String?
-  bird      Bird?     @relation(fields: [birdId], references: [id])
-  notes     String?
-  done      Boolean   @default(false)
+  id       String    @id @default(cuid())
+  title    String
+  type     String // vet / bandage / med_start / med_stop / med_reassess / refill / supply / transfer / adoption / followup
+  startsAt DateTime
+  endsAt   DateTime?
+  birdId   String?
+  bird     Bird?     @relation(fields: [birdId], references: [id])
+  notes    String?
+  done     Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -376,26 +424,26 @@ model VetVisit {
 // PHASE 2: TRANSPORT
 // ========================================================================
 model TransportVolunteer {
-  id              String   @id @default(cuid())
-  name            String
-  phone           String?
-  email           String?
-  location        String?
-  vehicleType     String?  // sedan / SUV / pickup / van / etc.
-  maxDistanceMi   Int?     // willingness in miles
-  medicalCapable  Boolean  @default(false)
-  availability    String?  // free-text or weekly pattern
-  notes           String?
+  id             String  @id @default(cuid())
+  name           String
+  phone          String?
+  email          String?
+  location       String?
+  vehicleType    String? // sedan / SUV / pickup / van / etc.
+  maxDistanceMi  Int? // willingness in miles
+  medicalCapable Boolean @default(false)
+  availability   String? // free-text or weekly pattern
+  notes          String?
 
   // Cross-link to other directories so the same person isn't duplicated.
   // A person who's both a foster and a driver shares one Foster record;
   // their TransportVolunteer record references it via linkedFosterId.
-  linkedFosterId  String?  @unique
-  linkedFoster    Foster?  @relation("FosterAsDriver", fields: [linkedFosterId], references: [id])
+  linkedFosterId String? @unique
+  linkedFoster   Foster? @relation("FosterAsDriver", fields: [linkedFosterId], references: [id])
 
-  requests        TransportRequest[]
-  availabilities  TransportAvailability[]
-  shifts          TransportShift[]
+  requests       TransportRequest[]
+  availabilities TransportAvailability[]
+  shifts         TransportShift[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -409,15 +457,16 @@ model TransportVolunteer {
 // fans out from there (expanded by the rrule lib at render time).
 // ------------------------------------------------------------------
 model TransportAvailability {
-  id          String   @id @default(cuid())
+  id          String             @id @default(cuid())
   volunteerId String
   volunteer   TransportVolunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
   startsAt    DateTime
   endsAt      DateTime
-  rrule       String?  // iCal RRULE string when this is a recurring template
+  rrule       String? // iCal RRULE string when this is a recurring template
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
   @@index([volunteerId, startsAt])
 }
 
@@ -427,49 +476,50 @@ model TransportAvailability {
 // time a driver is on duty / scheduled for transport work.
 // ------------------------------------------------------------------
 model TransportShift {
-  id           String   @id @default(cuid())
-  volunteerId  String?
-  volunteer    TransportVolunteer? @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
-  startsAt     DateTime
-  endsAt       DateTime
-  rrule        String?  // when recurring
-  role         String?  // free text — "Long-haul", "Local", "Pickup", etc.
-  notes        String?
-  status       String   @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
-  createdAt    DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id          String              @id @default(cuid())
+  volunteerId String?
+  volunteer   TransportVolunteer? @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
+  startsAt    DateTime
+  endsAt      DateTime
+  rrule       String? // when recurring
+  role        String? // free text — "Long-haul", "Local", "Pickup", etc.
+  notes       String?
+  status      String              @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
   @@index([volunteerId, startsAt])
   @@index([startsAt])
 }
 
 model TransportRequest {
-  id           String   @id @default(cuid())
+  id          String    @id @default(cuid())
   // NEW (PR C): optional title for multi-stop requests. Legacy rows leave
   // this null; UI shows a fallback like "Transport request" when null.
-  title        String?
+  title       String?
   // NEW (PR C): free-text type (vet / intake / transfer / surrender / other).
-  type         String?
-  birdId       String?
-  bird         Bird?    @relation(fields: [birdId], references: [id], onDelete: SetNull)
+  type        String?
+  birdId      String?
+  bird        Bird?     @relation(fields: [birdId], references: [id], onDelete: SetNull)
   // LEGACY single-stop fields. Made nullable in PR C so new multi-stop
   // requests can leave them blank. Existing data is preserved; render the
   // detail page with a "migrate to multi-stop" banner when these are set
   // and there are no TransportStop rows.
-  fromAddress  String?
-  toAddress    String?
-  pickupBy     DateTime?
-  deliverBy    DateTime?
-  description  String?
-  urgency      String   @default("normal") // low / normal / high / urgent
-  status       String   @default("open")   // open / assigned / in_transit / delivered / cancelled
-  notes        String?
+  fromAddress String?
+  toAddress   String?
+  pickupBy    DateTime?
+  deliverBy   DateTime?
+  description String?
+  urgency     String    @default("normal") // low / normal / high / urgent
+  status      String    @default("open") // open / assigned / in_transit / delivered / cancelled
+  notes       String?
 
-  volunteerId  String?
-  volunteer    TransportVolunteer? @relation(fields: [volunteerId], references: [id])
+  volunteerId String?
+  volunteer   TransportVolunteer? @relation(fields: [volunteerId], references: [id])
 
   // PR C: multi-stop + multi-bird (back-compat: legacy rows have neither).
-  stops        TransportStop[]
-  birds        TransportRequestBird[]
+  stops TransportStop[]
+  birds TransportRequestBird[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -483,17 +533,17 @@ model TransportRequest {
 // non-null means a window from timeStart to timeEnd.
 // ------------------------------------------------------------------
 model TransportStop {
-  id          String   @id @default(cuid())
-  requestId   String
-  request     TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  kind        String   // "pickup" | "dropoff"
-  location    String?
-  timeStart   DateTime?
-  timeEnd     DateTime?
-  notes       String?
-  sortOrder   Int      @default(0)
+  id        String           @id @default(cuid())
+  requestId String
+  request   TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  kind      String // "pickup" | "dropoff"
+  location  String?
+  timeStart DateTime?
+  timeEnd   DateTime?
+  notes     String?
+  sortOrder Int              @default(0)
 
-  birds       TransportStopBird[]
+  birds TransportStopBird[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -510,7 +560,8 @@ model TransportRequestBird {
   requestId String
   birdId    String
   request   TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  bird      Bird @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  bird      Bird             @relation(fields: [birdId], references: [id], onDelete: Cascade)
+
   @@id([requestId, birdId])
 }
 
@@ -521,10 +572,11 @@ model TransportRequestBird {
 // turn it on later.
 // ------------------------------------------------------------------
 model TransportStopBird {
-  stopId    String
-  birdId    String
-  stop      TransportStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
-  bird      Bird @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  stopId String
+  birdId String
+  stop   TransportStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  bird   Bird          @relation(fields: [birdId], references: [id], onDelete: Cascade)
+
   @@id([stopId, birdId])
 }
 
@@ -532,23 +584,23 @@ model TransportStopBird {
 // PHASE 2: RESCUE SHIFTS
 // ========================================================================
 model RescueVolunteer {
-  id              String   @id @default(cuid())
-  name            String
-  phone           String?
-  email           String?
-  location        String?
-  skills          String?  // free text — climbing / netting / first-aid / driver / etc.
+  id                String  @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  location          String?
+  skills            String? // free text — climbing / netting / first-aid / driver / etc.
   emergencyResponse Boolean @default(false)
-  availability    String?
-  notes           String?
+  availability      String?
+  notes             String?
 
   // Cross-link to Foster so a foster who also does rescue isn't duplicated.
-  linkedFosterId  String?  @unique
-  linkedFoster    Foster?  @relation("FosterAsRescuer", fields: [linkedFosterId], references: [id])
+  linkedFosterId String? @unique
+  linkedFoster   Foster? @relation("FosterAsRescuer", fields: [linkedFosterId], references: [id])
 
-  shifts          RescueShift[]
-  availabilities  RescueAvailability[]
-  assignedCases   RescueCase[]  // PR D: rescue cases assigned to this volunteer
+  shifts         RescueShift[]
+  availabilities RescueAvailability[]
+  assignedCases  RescueCase[] // PR D: rescue cases assigned to this volunteer
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -571,48 +623,48 @@ model RescueVolunteer {
 // with whatever info she has and fill in the rest as it comes in.
 // ========================================================================
 model RescueCase {
-  id                String   @id @default(cuid())
-  status            String   @default("needs_rescue")
+  id     String @id @default(cuid())
+  status String @default("needs_rescue")
   // needs_rescue / rescued / escaped_flew_away / closed_unable
 
   // What's being rescued
-  birdDescription   String?  // "blue bar pigeon"
-  issue             String?  // "broken wing, can't fly"
+  birdDescription String? // "blue bar pigeon"
+  issue           String? // "broken wing, can't fly"
 
   // Where
-  location          String?  // human-readable, e.g. "parking garage on 7th and Spring"
-  address           String?  // canonical address if known
+  location String? // human-readable, e.g. "parking garage on 7th and Spring"
+  address  String? // canonical address if known
 
   // Reporter info
-  dateCalledIn      DateTime @default(now())
-  reporterName      String?
-  reporterPhone     String?
-  reporterContact   String?  // catch-all: email / IG handle / other
+  dateCalledIn    DateTime @default(now())
+  reporterName    String?
+  reporterPhone   String?
+  reporterContact String? // catch-all: email / IG handle / other
 
   // Last-seen tracking (separate from initial sighting, may be updated later)
-  lastSeenAt        DateTime?
-  lastSeenLocation  String?
-  lastSeenNotes     String?
+  lastSeenAt       DateTime?
+  lastSeenLocation String?
+  lastSeenNotes    String?
 
-  notes             String?
+  notes String?
 
   // When the bird is rescued + brought into the system, this points to
   // the newly-created Bird record. Nullable for cases still in progress
   // or that escaped/closed without a Bird being created.
-  rescuedBirdId     String?
-  rescuedBird       Bird? @relation(fields: [rescuedBirdId], references: [id], onDelete: SetNull)
+  rescuedBirdId String?
+  rescuedBird   Bird?   @relation(fields: [rescuedBirdId], references: [id], onDelete: SetNull)
 
   // Assigned rescuer(s) — MVP supports single assignment; many-to-many
   // could come in a later PR.
   assignedVolunteerId String?
   assignedVolunteer   RescueVolunteer? @relation(fields: [assignedVolunteerId], references: [id], onDelete: SetNull)
 
-  updates           RescueCaseUpdate[]
-  photos            RescueCasePhoto[]
+  updates RescueCaseUpdate[]
+  photos  RescueCasePhoto[]
 
   // Soft-delete / archive
-  archivedAt        DateTime?
-  deletedAt         DateTime?
+  archivedAt DateTime?
+  deletedAt  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -624,26 +676,26 @@ model RescueCase {
 // Timeline of attempts / observations / status changes on a case.
 // Append-only from the UI; older entries should rarely be edited.
 model RescueCaseUpdate {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   caseId      String
   case        RescueCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   text        String
   // Optional: when the attempt/observation happened (may differ from createdAt
   // if Christina is logging a past attempt after the fact).
-  attemptedAt DateTime @default(now())
+  attemptedAt DateTime   @default(now())
   authorName  String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
 
   @@index([caseId, attemptedAt])
 }
 
 model RescueCasePhoto {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   caseId    String
   case      RescueCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
   url       String
   caption   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 
   @@index([caseId])
 }
@@ -653,36 +705,38 @@ model RescueCasePhoto {
 // as TransportAvailability — see that model's comments.
 // ------------------------------------------------------------------
 model RescueAvailability {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   volunteerId String
   volunteer   RescueVolunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
   startsAt    DateTime
   endsAt      DateTime
   rrule       String?
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
   @@index([volunteerId, startsAt])
 }
 
 model RescueShift {
-  id           String   @id @default(cuid())
-  startsAt     DateTime
-  endsAt       DateTime
+  id        String   @id @default(cuid())
+  startsAt  DateTime
+  endsAt    DateTime
   // Pre-existing fields (kept for backward compat with the /rescue page):
-  shiftType    String   @default("on_call") // on_call / active / emergency_backup
-  area         String?
-  notes        String?
+  shiftType String   @default("on_call") // on_call / active / emergency_backup
+  area      String?
+  notes     String?
   // PR-B additions: recurrence + role + status workflow.
-  rrule        String?  // when recurring
-  role         String?  // free text — "Catch", "Field assist", etc.
-  status       String   @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
+  rrule     String? // when recurring
+  role      String? // free text — "Catch", "Field assist", etc.
+  status    String   @default("scheduled") // scheduled / in_progress / completed / cancelled / no_show
 
-  volunteerId  String?
-  volunteer    RescueVolunteer? @relation(fields: [volunteerId], references: [id])
+  volunteerId String?
+  volunteer   RescueVolunteer? @relation(fields: [volunteerId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([volunteerId, startsAt])
   @@index([startsAt])
 }
@@ -691,14 +745,14 @@ model RescueShift {
 // PHASE 2: SUPPLY INVENTORY
 // ========================================================================
 model Supply {
-  id           String   @id @default(cuid())
-  name         String
-  category     String?  // food / medical / housing / cleaning / paperwork
-  unit         String?  // lb / box / each / mL
-  onHand       Float    @default(0)
-  threshold    Float    @default(0)   // alert if onHand <= threshold
-  reorderUrl   String?
-  notes        String?
+  id         String  @id @default(cuid())
+  name       String
+  category   String? // food / medical / housing / cleaning / paperwork
+  unit       String? // lb / box / each / mL
+  onHand     Float   @default(0)
+  threshold  Float   @default(0) // alert if onHand <= threshold
+  reorderUrl String?
+  notes      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -715,7 +769,7 @@ model Supply {
 model MedicationCatalog {
   id           String   @id @default(cuid())
   name         String   @unique
-  defaultUnits String?  // mg / ml / drops / tablets / capsules / IU / mcg
+  defaultUnits String? // mg / ml / drops / tablets / capsules / IU / mcg
   createdAt    DateTime @default(now())
 }
 
@@ -723,15 +777,15 @@ model MedicationCatalog {
 // PHASE 2: BANDAGE TASKS (recurring per bird)
 // ========================================================================
 model BandageTask {
-  id            String    @id @default(cuid())
-  birdId        String
-  bird          Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
-  description   String
-  intervalDays  Int       @default(2)
-  nextDueAt     DateTime
-  lastDoneAt    DateTime?
-  active        Boolean   @default(true)
-  notes         String?
+  id           String    @id @default(cuid())
+  birdId       String
+  bird         Bird      @relation(fields: [birdId], references: [id], onDelete: Cascade)
+  description  String
+  intervalDays Int       @default(2)
+  nextDueAt    DateTime
+  lastDoneAt   DateTime?
+  active       Boolean   @default(true)
+  notes        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

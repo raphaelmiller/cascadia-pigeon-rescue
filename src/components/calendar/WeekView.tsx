@@ -319,8 +319,9 @@ export function WeekView({
                         ? 'bg-[repeating-linear-gradient(135deg,rgba(16,185,129,0.18)_0_6px,transparent_6px_12px)]'
                         : 'bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.18)_0_6px,transparent_6px_12px)]')
                       : '';
+                    // PR G: Change conflict styling to indicate overlap, not blocking conflict
                     const conflict = ev.hasConflict
-                      ? 'ring-2 ring-red-500 outline outline-1 outline-red-300'
+                      ? 'ring-2 ring-dashed ring-amber-400 outline outline-1 outline-amber-300'
                       : 'ring-1';
                     return (
                       <button
@@ -334,7 +335,7 @@ export function WeekView({
                         <div className={`absolute inset-0 rounded-md pointer-events-none ${stripe}`} />
                         <div className="relative flex items-center gap-1 font-semibold truncate">
                           {ev.isRecurringInstance && <span title="Recurring">🔁</span>}
-                          {ev.hasConflict && <span title="Conflict">⚠</span>}
+                          {ev.hasConflict && <span title="Overlap">🔄</span>}
                           <span className="truncate">{ev.title}</span>
                         </div>
                         <div className="relative text-[10px] opacity-90 truncate">
@@ -438,7 +439,8 @@ function MobileDayList({
                   const cls = isAvail
                     ? 'bg-emerald-50 ring-emerald-200 text-emerald-900'
                     : 'bg-sky-100 ring-sky-300 text-sky-900';
-                  const conflictRing = ev.hasConflict ? ' ring-2 ring-red-500' : ' ring-1';
+                  // PR G: Change conflict styling to indicate overlap, not blocking conflict
+                  const conflictRing = ev.hasConflict ? ' ring-2 ring-dashed ring-amber-400' : ' ring-1';
                   return (
                     <li key={ev.occurrenceId}>
                       <button
@@ -448,7 +450,7 @@ function MobileDayList({
                       >
                         <div className="flex items-center gap-1.5 text-sm font-semibold">
                           {ev.isRecurringInstance && <span title="Recurring">🔁</span>}
-                          {ev.hasConflict && <span title="Conflict">⚠</span>}
+                          {ev.hasConflict && <span title="Overlap">🔄</span>}
                           <span className="truncate">{ev.title}</span>
                         </div>
                         <div className="text-xs opacity-80 mt-0.5">

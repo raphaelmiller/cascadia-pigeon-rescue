@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, Card, Pill, StatusDot, Btn, Empty } from '@/components/ui';
 import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES } from '@/lib/constants';
+import { deriveWhereabouts } from '@/lib/whereabouts';
 import { fmtDate } from '@/lib/utils';
 import { activeBirdWhere } from '@/lib/filters';
 import { SwipeRow } from '@/components/SwipeRow';
@@ -36,6 +37,7 @@ export default async function BirdsPage({
     include: {
       foster: true,
       photos: { where: { isProfile: true, kind: 'image' }, take: 1 },
+      whereaboutsLog: { orderBy: { recordedAt: 'desc' }, take: 1 },
     },
     orderBy: { intakeDate: 'desc' },
   });
@@ -157,9 +159,17 @@ export default async function BirdsPage({
                             </div>
                             <p className="text-xs text-gray-500 mt-0.5">{b.species || 'pigeon'} · {b.age || 'age unknown'}</p>
                           </div>
-                          {b.medicalPriority !== 'none' && (
-                            <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
-                          )}
+                          <div className="flex gap-2 flex-wrap">
+                            {b.medicalPriority !== 'none' && (
+                              <Pill tone={PRIORITY_TONE[b.medicalPriority]}>{b.medicalPriority}</Pill>
+                            )}
+                            {(() => {
+                              const whereabouts = deriveWhereabouts(b.whereaboutsLog, b.status);
+                              return (
+                                <Pill tone={whereabouts.tone}>{whereabouts.label}</Pill>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </div>
                     </div>

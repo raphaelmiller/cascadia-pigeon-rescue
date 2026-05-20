@@ -2,7 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, StatusDot, Btn, Empty, Field, inputClass } from '@/components/ui';
-import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES, MEDICAL_PRIORITIES } from '@/lib/constants';
+import { STATUS_LABELS, STATUS_TONE, PRIORITY_TONE, BIRD_STATUSES, MEDICAL_PRIORITIES, WHEREABOUTS_CATEGORIES, WHEREABOUTS_LABELS, WHEREABOUTS_TONE } from '@/lib/constants';
+import { deriveWhereabouts } from '@/lib/whereabouts';
 import { fmtDate, fmtDateTime, fmtRelative } from '@/lib/utils';
 import { activeFosterWhere } from '@/lib/filters';
 import { saveUpload, saveUploads, deleteUpload } from '@/lib/uploads';
@@ -246,6 +247,39 @@ async function deletePhoto(id: string, photoId: string) {
   redirect(`/birds/${id}`);
 }
 
+async function addWhereaboutsEntry(id: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const category = String(formData.get('category') || '');
+  const notes = String(formData.get('notes') || '').trim() || null;
+  const recordedAtStr = String(formData.get('recordedAt') || '');
+  
+  if (!WHEREABOUTS_CATEGORIES.includes(category as any)) return;
+  
+  // Use provided date or default to now
+  const recordedAt = recordedAtStr ? new Date(`${recordedAtStr}T12:00:00`) : new Date();
+  
+  await prisma.whereaboutsLogEntry.create({
+    data: {
+      birdId: id,
+      category,
+      notes,
+      recordedAt,
+      recordedBy: 'operator', // TODO: Get actual operator name when auth is expanded
+    },
+  });
+  redirect(`/birds/${id}`);
+}
+
+async function deleteWhereaboutsEntry(id: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const entryId = String(formData.get('entryId') || '');
+  if (!entryId) return;
+  await prisma.whereaboutsLogEntry.deleteMany({ where: { id: entryId, birdId: id } });
+  redirect(`/birds/${id}`);
+}
+
 export default async function BirdDetail({
   params,
   searchParams,
@@ -268,6 +302,7 @@ export default async function BirdDetail({
       requests: { orderBy: { createdAt: 'desc' }, include: { foster: true } },
       photos: { orderBy: [{ isProfile: 'desc' }, { createdAt: 'desc' }] },
       weightLog: { orderBy: [{ measuredAt: 'desc' }, { createdAt: 'desc' }] },
+      whereaboutsLog: { orderBy: { recordedAt: 'desc' } },
     },
   });
   if (!bird) notFound();
@@ -314,6 +349,8 @@ export default async function BirdDetail({
   const medAction = addMedication.bind(null, bird.id);
   const weightAddAction = addWeightEntry.bind(null, bird.id);
   const weightDeleteAction = deleteWeightEntry.bind(null, bird.id);
+  const whereaboutsAddAction = addWhereaboutsEntry.bind(null, bird.id);
+  const whereaboutsDeleteAction = deleteWhereaboutsEntry.bind(null, bird.id);
   const foundDateStr = formatPartialDate(
     bird.foundDateYear,
     bird.foundDateMonth,
@@ -583,6 +620,38 @@ export default async function BirdDetail({
                   <span className="font-medium">Cleared for Integration</span>
                 </label>
               </div>
+              <div className="sm:col-span-2 grid sm:grid-cols-2 gap-2">
+                <label
+                  className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 transition cursor-pointer ${
+                    bird.bornInCaptivity
+                      ? 'bg-blue-50 text-blue-900 ring-blue-300'
+                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="bornInCaptivity"
+                    defaultChecked={bird.bornInCaptivity}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="font-medium">Born in Captivity</span>
+                </label>
+                <label
+                  className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 transition cursor-pointer ${
+                    bird.ownerSurrender
+                      ? 'bg-purple-50 text-purple-900 ring-purple-300'
+                      : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="ownerSurrender"
+                    defaultChecked={bird.ownerSurrender}
+                    className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span className="font-medium">Owner Surrender</span>
+                </label>
+              </div>
               <Field label="Species">
                 <input name="species" defaultValue={bird.species ?? ''} className={inputClass} />
               </Field>
@@ -647,6 +716,9 @@ export default async function BirdDetail({
               <Field label="Special handling" className="sm:col-span-2">
                 <textarea name="specialHandling" rows={2} defaultValue={bird.specialHandling ?? ''} className={inputClass} />
               </Field>
+              <Field label="Backstory" className="sm:col-span-2" hint="Narrative history of this bird's journey with us. Limit 10,000 characters.">
+                <textarea name="backstory" rows={6} maxLength={10000} defaultValue={bird.backstory ?? ''} className={inputClass} />
+              </Field>
               <div className="sm:col-span-2">
                 <Btn type="submit" variant="primary">Save changes</Btn>
               </div>
@@ -668,6 +740,96 @@ export default async function BirdDetail({
               addAction={weightAddAction}
               deleteAction={weightDeleteAction}
             />
+          </Card>
+
+          {/* Current Whereabouts */}
+          <Card>
+            <H2>Current Whereabouts</H2>
+            {(() => {
+              const whereabouts = deriveWhereabouts(bird.whereaboutsLog, bird.status);
+              return (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Pill tone={whereabouts.tone}>{whereabouts.label}</Pill>
+                    <span className="text-xs text-gray-500">
+                      {whereabouts.source === 'log' ? 'from log' : 'derived from status'}
+                    </span>
+                  </div>
+                  {whereabouts.notes && (
+                    <p className="text-sm text-gray-700 mb-2">{whereabouts.notes}</p>
+                  )}
+                  {whereabouts.recordedAt && (
+                    <p className="text-xs text-gray-500">
+                      Recorded {fmtRelative(whereabouts.recordedAt)}
+                      {whereabouts.recordedBy && ` by ${whereabouts.recordedBy}`}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+            
+            {/* Whereabouts Log Timeline */}
+            {bird.whereaboutsLog.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Whereabouts History</h3>
+                <div className="space-y-2">
+                  {bird.whereaboutsLog.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-3 p-2 bg-gray-50 rounded-lg">
+                      <Pill tone={WHEREABOUTS_TONE[entry.category as keyof typeof WHEREABOUTS_TONE] || 'gray'}>
+                        {WHEREABOUTS_LABELS[entry.category as keyof typeof WHEREABOUTS_LABELS] || entry.category}
+                      </Pill>
+                      <div className="flex-1 min-w-0">
+                        {entry.notes && (
+                          <p className="text-sm text-gray-700 mb-1">{entry.notes}</p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          {fmtDateTime(entry.recordedAt)}
+                          {entry.recordedBy && ` · recorded by ${entry.recordedBy}`}
+                        </p>
+                      </div>
+                      <form action={whereaboutsDeleteAction} className="flex-shrink-0">
+                        <input type="hidden" name="entryId" value={entry.id} />
+                        <button
+                          type="submit"
+                          className="text-xs text-red-600 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50"
+                          onClick={(e) => {
+                            if (!confirm('Delete this whereabouts entry?')) e.preventDefault();
+                          }}
+                        >
+                          delete
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Add New Whereabouts Entry Form */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Add Whereabouts Entry</h3>
+              <form action={whereaboutsAddAction} className="grid grid-cols-1 gap-3">
+                <Field label="Category">
+                  <select name="category" className={inputClass} required>
+                    <option value="">Select whereabouts...</option>
+                    {WHEREABOUTS_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {WHEREABOUTS_LABELS[cat as keyof typeof WHEREABOUTS_LABELS]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Notes (optional)">
+                  <textarea name="notes" rows={2} className={inputClass} placeholder="Additional details..." />
+                </Field>
+                <Field label="Date (optional)" hint="Leave blank for current date/time">
+                  <input type="date" name="recordedAt" className={inputClass} />
+                </Field>
+                <div>
+                  <Btn type="submit" variant="primary">Add Entry</Btn>
+                </div>
+              </form>
+            </div>
           </Card>
 
           {/* Medications */}

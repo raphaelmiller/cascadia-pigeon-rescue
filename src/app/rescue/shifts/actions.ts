@@ -40,9 +40,10 @@ export async function saveRescueShift(fd: FormData): Promise<SaveResult> {
           select: { id: true, startsAt: true, endsAt: true, rrule: true, role: true },
         }),
     });
-    if (warnings.length > 0 && !block.override) {
-      return { ok: false, warnings };
-    }
+    // PR G: Allow saves with overlaps, just warn the user
+    // if (warnings.length > 0 && !block.override) {
+    //   return { ok: false, warnings };
+    // }
   }
 
   if (block.id) {
@@ -77,7 +78,7 @@ export async function saveRescueShift(fd: FormData): Promise<SaveResult> {
   }
   revalidatePath('/rescue/shifts');
   revalidatePath('/rescue');
-  return { ok: true };
+  return { ok: true, warnings };
 }
 
 export async function deleteRescueShift(id: string): Promise<SaveResult> {

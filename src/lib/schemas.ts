@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   BIRD_STATUSES, MEDICAL_PRIORITIES, REQUEST_URGENCIES, CALENDAR_TYPES,
+  WHEREABOUTS_CATEGORIES,
   TRANSPORT_STATUSES, SHIFT_TYPES,
 } from '@/lib/constants';
 import { daysInMonth } from '@/lib/partialDate';
@@ -91,6 +92,32 @@ export const birdUpdateSchema = z.object({
   // Projected-cleared partial date (year required at the form layer,
   // month + day optional). Mirrors foundDate*.
   ...partialDateFields('projectedCleared'),
+  // PR G (2026-05-19) — intake metadata flags. Both default off when
+  // their checkbox is absent from the form.
+  bornInCaptivity: checkboxBool,
+  ownerSurrender:  checkboxBool,
+  // PR G — freeform backstory. Hard cap 10K; the form hints ~2K.
+  // Empty string → null so we don't store empty strings.
+  backstory: z.preprocess(
+    v => (typeof v === 'string' ? v.trim() : v),
+    z.string().max(10_000).optional().transform(v => (v ? v : null)),
+  ),
+});
+
+// PR G — WhereaboutsLogEntry create/update.
+// `recordedAt` defaults server-side; the form may submit a back-dated
+// ISO date if the operator is logging history.
+export const whereaboutsLogEntrySchema = z.object({
+  category: z.enum(WHEREABOUTS_CATEGORIES as unknown as [string, ...string[]]),
+  notes: z.preprocess(
+    v => (typeof v === 'string' ? v.trim() : v),
+    z.string().max(4_000).optional().transform(v => (v ? v : null)),
+  ),
+  recordedAt: z.preprocess(
+    v => (typeof v === 'string' && v.length > 0 ? new Date(v) : v),
+    z.date().optional(),
+  ),
+  recordedBy: optionalString,
 });
 
 // One ongoing weight reading on a bird.

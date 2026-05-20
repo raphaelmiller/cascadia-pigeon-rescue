@@ -38,6 +38,13 @@ async function createBird(formData: FormData) {
       foundLocation: String(formData.get('foundLocation') || '') || null,
       finderName: String(formData.get('finderName') || '') || null,
       finderContact: String(formData.get('finderContact') || '') || null,
+      // PR G: intake metadata flags. Independent of where-found fields
+      // — a born-in-captivity bird can still have a "where it came from"
+      // address (breeder / surrendering owner).
+      bornInCaptivity: formData.get('bornInCaptivity') === 'on',
+      ownerSurrender: formData.get('ownerSurrender') === 'on',
+      // PR G: freeform backstory (hard-capped 10K in schemas.ts).
+      backstory: (String(formData.get('backstory') || '').trim() || null),
       status,
       medicalPriority,
       currentlyQuarantined: formData.get('currentlyQuarantined') === 'on',
@@ -143,7 +150,37 @@ export default async function NewBirdPage() {
             <Field label="Finder contact">
               <input name="finderContact" className={inputClass} placeholder="phone / email" />
             </Field>
+            {/* PR G — intake metadata flags. Independent of the
+                where-found fields above (a captive-born or surrendered
+                bird can still have a "came from" address). */}
+            <label className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 ring-gray-200 bg-white hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="bornInCaptivity" className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+              <span className="font-medium">Born in captivity</span>
+            </label>
+            <label className="flex items-center gap-2 text-sm rounded-lg px-3 py-2 ring-1 ring-gray-200 bg-white hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="ownerSurrender" className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
+              <span className="font-medium">Owner surrender</span>
+            </label>
           </div>
+        </Card>
+
+        {/* PR G — backstory: freeform note about the bird's history. */}
+        <Card>
+          <h3 className="font-semibold mb-3">Backstory</h3>
+          <p className="text-xs text-gray-500 mb-2">
+            Optional. Anything Christina would want to remember about this
+            bird's history — prior owner, vet history, found-circumstances
+            narrative, behavioral quirks, anything that doesn't fit in the
+            other fields. Aim for a few sentences; up to ~2,000 characters
+            is fine, hard cap 10,000.
+          </p>
+          <textarea
+            name="backstory"
+            rows={6}
+            maxLength={10_000}
+            className={`${inputClass} font-normal`}
+            placeholder="e.g. Found in March 2024 in a parking lot near Pike Place..."
+          />
         </Card>
 
         <Card>
