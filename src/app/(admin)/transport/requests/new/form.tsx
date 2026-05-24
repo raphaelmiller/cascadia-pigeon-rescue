@@ -278,6 +278,23 @@ export function NewTransportForm(props: {
       <input type="hidden" name="stops" value={stopsJson} />
       <input type="hidden" name="birdIds" value={selectedBirdIds.join(',')} />
 
+      {/* Phase 1: urgency + dispatch fan-out */}
+      <section className="rounded-lg border border-red-200 bg-red-50/30 p-3 space-y-3">
+        <h3 className="text-sm font-semibold text-red-800 uppercase tracking-wide">Urgency — dispatch fan-out</h3>
+        <p className="text-xs text-gray-600">
+          On save, every transport-tagged volunteer whose shift overlaps NOW gets an SMS.
+          Emergency (or deadline &lt; 30 min) also notifies coordinators + Christina immediately.
+        </p>
+        <Field label="Deadline (optional)">
+          <input type="datetime-local" name="deadline" className={inputClass} />
+        </Field>
+        <label className="flex items-center gap-2 text-sm text-red-900 font-medium">
+          <input type="checkbox" name="emergencyFlag" value="1"
+            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+          Emergency — fan out to volunteers + coordinators + Christina immediately
+        </label>
+      </section>
+
       <Btn type="submit" variant="primary">
         Save transport job
       </Btn>

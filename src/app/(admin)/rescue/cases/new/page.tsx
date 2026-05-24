@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { H1, Card, Btn, Field, inputClass } from '@/components/ui';
 import { requireOperator } from '@/lib/auth';
 import { saveUploads } from '@/lib/uploads';
+import { dispatchJob } from '@/lib/volunteer/dispatch';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +33,8 @@ async function createCase(formData: FormData) {
   const notes = String(formData.get('notes') || '').trim() || null;
   const assignedVolunteerId = String(formData.get('assignedVolunteerId') || '') || null;
   const dateCalledInRaw = String(formData.get('dateCalledIn') || '').trim();
+  const emergencyFlag = formData.get('emergencyFlag') === '1';
+  const deadlineRaw = String(formData.get('deadline') || '').trim();
 
   // Reject totally empty submissions — at least one descriptor must be set.
   if (!birdDescription && !issue && !location && !reporterName && !reporterPhone) {
@@ -49,10 +52,23 @@ async function createCase(formData: FormData) {
       reporterContact,
       notes,
       assignedVolunteerId,
+      emergencyFlag,
+      ...(deadlineRaw ? { deadline: new Date(deadlineRaw) } : {}),
       ...(dateCalledInRaw ? { dateCalledIn: new Date(dateCalledInRaw) } : {}),
       // status defaults to 'needs_rescue'
     },
   });
+
+  // Phase 1 dispatch: fan out assignments + SMS to eligible volunteers.
+  // We run this AFTER create so the case is durably persisted before any
+  // external side-effects (SMS, escalation rows) fire. Errors in dispatch
+  // don't roll back the case -- we'd rather have an undispatched case
+  // Christina can manually re-dispatch than lose the case entirely.
+  try {
+    await dispatchJob('RescueCase', created.id);
+  } catch (err) {
+    console.error('[rescue:new] dispatchJob failed', err);
+  }
 
   // Photos uploaded with the initial report. Saved outside the create
   // call because file IO can fail without rolling back the case — better
@@ -163,6 +179,31 @@ export default async function NewRescueCasePage() {
                 defaultValue={toLocalDatetime(new Date())}
               />
             </Field>
+          </section>
+
+          {/* Urgency + dispatch */}
+          <section className="rounded-lg border border-red-200 bg-red-50/30 p-3 space-y-3">
+            <h3 className="text-sm font-semibold text-red-800 uppercase tracking-wide">Urgency — dispatch fan-out</h3>
+            <p className="text-xs text-gray-600">
+              When you save, every volunteer whose shift overlaps NOW gets an SMS.
+              Emergency cases (or deadlines &lt; 30 min from now) also notify all coordinators + Christina simultaneously.
+            </p>
+            <Field label="Deadline (optional)">
+              <input
+                type="datetime-local"
+                name="deadline"
+                className={inputClass}
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-red-900 font-medium">
+              <input
+                type="checkbox"
+                name="emergencyFlag"
+                value="1"
+                className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              Emergency — fan out to volunteers + coordinators + Christina immediately
+            </label>
           </section>
 
           {/* Assignment + notes */}

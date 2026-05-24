@@ -6,7 +6,7 @@ import { requireOperator } from '@/lib/auth';
 import { H1, Card } from '@/components/ui';
 import { WeekScheduler } from '@/components/calendar/WeekScheduler';
 import { expandRange } from '@/lib/scheduling';
-import { saveRescueAvailability, deleteRescueAvailability } from '@/app/rescue/availability/actions';
+import { saveRescueAvailability, deleteRescueAvailability } from '@/app/(admin)/rescue/availability/actions';
 
 export const dynamic = 'force-dynamic';
 

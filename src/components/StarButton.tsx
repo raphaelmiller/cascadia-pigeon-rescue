@@ -15,7 +15,7 @@
 //     never sees the event (otherwise the page navigates).
 
 import { useState, useTransition } from 'react';
-import { toggleBirdStar } from '@/app/birds/star-action';
+import { toggleBirdStar } from '@/app/(admin)/birds/star-action';
 
 export function StarButton({
   birdId,

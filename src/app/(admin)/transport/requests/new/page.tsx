@@ -28,6 +28,7 @@
 // 20260518225203_pr_c_transport_multistop_v2/migration.sql
 
 import { redirect } from 'next/navigation';
+import { dispatchJob } from '@/lib/volunteer/dispatch';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, Card, Btn } from '@/components/ui';
@@ -91,9 +92,13 @@ async function createMultiStopRequest(formData: FormData) {
   // almost certainly a form misfire. Otherwise allow anything.
   if (!title && stopsParsed.length === 0 && birdIds.length === 0) return;
 
+  // Phase 1 dispatch fields.
+  const emergencyFlag = formData.get('emergencyFlag') === '1';
+  const deadlineRaw = String(formData.get('deadline') || '').trim();
+
   // Single transaction so a partial failure can't leave orphan stops.
   const status = volunteerId ? 'assigned' : 'open';
-  await prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const req = await tx.transportRequest.create({
       data: {
         title,
@@ -103,6 +108,8 @@ async function createMultiStopRequest(formData: FormData) {
         description,
         notes,
         volunteerId,
+        emergencyFlag,
+        ...(deadlineRaw ? { deadline: new Date(deadlineRaw) } : {}),
       },
     });
 
@@ -137,6 +144,13 @@ async function createMultiStopRequest(formData: FormData) {
 
     return req;
   });
+
+  // Phase 1 dispatch: fan out to transport-tagged volunteers with overlap.
+  try {
+    await dispatchJob('TransportRequest', created.id);
+  } catch (err) {
+    console.error('[transport:new] dispatchJob failed', err);
+  }
 
   redirect('/transport');
 }

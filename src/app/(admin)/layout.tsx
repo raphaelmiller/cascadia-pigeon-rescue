@@ -1,4 +1,4 @@
-import './globals.css';
+import '../globals.css';
 import type { Metadata } from 'next';
 import { Nav } from '@/components/Nav';
 import { MaybeMain } from '@/components/MaybeMain';
