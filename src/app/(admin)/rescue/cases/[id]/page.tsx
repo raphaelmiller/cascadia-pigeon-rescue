@@ -319,7 +319,7 @@ export default async function RescueCaseDetail({
       {/* Add photos */}
       <Card>
         <H2>Add photos</H2>
-        <form action={addPhotosAction} className="mt-3" encType="multipart/form-data">
+        <form action={addPhotosAction} className="mt-3">
           <input type="file" name="photos" multiple accept="image/*" className={inputClass} />
           <div className="mt-2">
             <Btn type="submit" variant="primary">Upload</Btn>

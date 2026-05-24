@@ -992,7 +992,7 @@ export default async function BirdDetail({
             </div>
             <details className="mb-3">
               <summary className="cursor-pointer text-sm text-teal-700">+ Upload photos</summary>
-              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+              <form action={photoUploadAction} className="mt-3 space-y-2">
                 <input type="hidden" name="category" value="general" />
                 <input
                   type="file"
@@ -1051,7 +1051,7 @@ export default async function BirdDetail({
             <p className="text-xs text-gray-600 mb-3">Photos with medical significance — injuries, X-rays, wound progress — with notes.</p>
             <details className="mb-3">
               <summary className="cursor-pointer text-sm text-teal-700">+ Add health record</summary>
-              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+              <form action={photoUploadAction} className="mt-3 space-y-2">
                 <input type="hidden" name="category" value="health" />
                 <input
                   type="file"
@@ -1101,7 +1101,7 @@ export default async function BirdDetail({
             <p className="text-xs text-gray-600 mb-3">Documents and images from the vet — invoices, prescriptions, lab results, intake forms.</p>
             <details className="mb-3">
               <summary className="cursor-pointer text-sm text-teal-700">+ Upload document or image</summary>
-              <form action={photoUploadAction} className="mt-3 space-y-2" encType="multipart/form-data">
+              <form action={photoUploadAction} className="mt-3 space-y-2">
                 <input type="hidden" name="category" value="vet" />
                 <input
                   type="file"

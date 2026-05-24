@@ -329,7 +329,7 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
       {/* Edit */}
       <Card>
         <H2>Foster record</H2>
-        <form action={editAction} className="grid gap-3 sm:grid-cols-2 mt-3" encType="multipart/form-data">
+        <form action={editAction} className="grid gap-3 sm:grid-cols-2 mt-3">
           <div className="sm:col-span-2 rounded-xl bg-gray-50 ring-1 ring-gray-200 p-3 flex items-center gap-3">
             {f.photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

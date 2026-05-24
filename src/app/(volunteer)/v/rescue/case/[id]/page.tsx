@@ -298,7 +298,7 @@ export default async function VolunteerRescueCasePage({
 
         {/* Composer — only when the case is still active. */}
         {!isResolved && (
-          <form action={addRescueNoteAction} className="space-y-3" encType="multipart/form-data">
+          <form action={addRescueNoteAction} className="space-y-3">
             <input type="hidden" name="jobId" value={c.id} />
             <textarea
               name="text"

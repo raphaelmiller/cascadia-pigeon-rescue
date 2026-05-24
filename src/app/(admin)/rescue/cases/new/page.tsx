@@ -98,7 +98,7 @@ export default async function NewRescueCasePage() {
         <p className="text-sm text-gray-600 mb-4">
           Someone reported a bird in trouble. Fill in what you know — most fields are optional and can be added later as updates come in.
         </p>
-        <form action={createCase} className="space-y-4" encType="multipart/form-data">
+        <form action={createCase} className="space-y-4">
           {/* What */}
           <section className="rounded-lg border border-gray-200 p-3 space-y-3">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">The bird</h3>

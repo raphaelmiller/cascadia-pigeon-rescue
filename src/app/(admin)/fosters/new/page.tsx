@@ -53,7 +53,7 @@ export default function NewFosterPage() {
   return (
     <div className="space-y-4">
       <H1>New foster</H1>
-      <form action={createFoster} className="space-y-4" encType="multipart/form-data">
+      <form action={createFoster} className="space-y-4">
         {/* Profile photo */}
         <Card>
           <h3 className="font-semibold mb-3">Profile photo</h3>

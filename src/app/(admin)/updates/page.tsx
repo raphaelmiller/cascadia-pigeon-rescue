@@ -85,7 +85,7 @@ export default async function UpdatesPage() {
 
       <Card tone="green">
         <H2>Submit an update</H2>
-        <form action={createUpdate} className="grid gap-3 sm:grid-cols-2 mt-3" encType="multipart/form-data">
+        <form action={createUpdate} className="grid gap-3 sm:grid-cols-2 mt-3">
           <Field label="Bird *">
             <select required name="birdId" defaultValue="" className={inputClass}>
               <option value="">— select —</option>
