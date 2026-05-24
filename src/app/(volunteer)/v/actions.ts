@@ -15,6 +15,8 @@ import {
   resolveJob,
   passUnable,
   reverseResolution,
+  setStandby,
+  takeoverPointPerson,
   type RescueResolution,
   type TransportResolution,
 } from '@/lib/volunteer/job-resolution';
@@ -258,4 +260,43 @@ export async function addRescueNoteAction(fd: FD): Promise<void> {
   revalidatePath('/');
   revalidatePath('/rescue');
   redirect(`/rescue/case/${jobId}?msg=note_added`);
+}
+
+// PR I (2026-05-24): toggle "I can back up" standby for a paged non-PP
+// volunteer. The assignment stays in their feed; this just flags them as
+// actively following the case so they show up in the avatar stack +
+// unlock the take-over button once the heartbeat threshold passes.
+export async function toggleStandbyAction(fd: FD): Promise<void> {
+  const v = await requireVolunteer();
+  const { jobType, jobId } = jobFromForm(fd);
+  const standing_by = String(fd.get('standby') ?? '1') === '1';
+  const result = await setStandby({ jobType, jobId, actorProfileId: v.profileId, standing_by });
+  const back = jobType === 'RescueCase' ? `/rescue/case/${jobId}` : '/';
+  if (!result.ok) {
+    redirect(`${back}?msg=standby_failed:${result.reason}`);
+  }
+  revalidatePath('/');
+  revalidatePath(back);
+  redirect(`${back}?msg=${standing_by ? 'standby_on' : 'standby_off'}`);
+}
+
+// PR I: take over as Point Person. Threshold-gated (emergency = 10 min idle,
+// routine = 20 min idle). Coordinators bypass the threshold.
+export async function takeoverAction(fd: FD): Promise<void> {
+  const v = await requireVolunteer();
+  const jobId = String(fd.get('jobId') ?? '').trim();
+  if (!jobId) redirect('/?msg=invalid');
+  const result = await takeoverPointPerson({
+    jobId,
+    actorProfileId: v.profileId,
+    isCoordinator: v.isCoordinator,
+  });
+  const back = `/rescue/case/${jobId}`;
+  if (!result.ok) {
+    redirect(`${back}?msg=takeover_failed:${result.reason}`);
+  }
+  revalidatePath('/');
+  revalidatePath('/rescue');
+  revalidatePath(back);
+  redirect(`${back}?msg=took_over`);
 }

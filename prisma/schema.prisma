@@ -1174,11 +1174,21 @@ model Assignment {
 
   notes String?
 
+  // PR I (2026-05-24): non-Point-Person engagement state.
+  // standbyAt = when this paged volunteer tapped "I can back up". They
+  // remain status='notified' (so the assignment continues to show in
+  // their feed), but they're marked as actively-following the case.
+  // When the Point Person drops or hits the heartbeat threshold, the
+  // takeover button activates on standby cards.
+  standbyAt        DateTime?
+  standbyClearedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([jobType, jobId])
   @@index([profileId, status])
+  @@index([jobType, jobId, standbyAt])
   @@unique([jobType, jobId, profileId])
 }
 
