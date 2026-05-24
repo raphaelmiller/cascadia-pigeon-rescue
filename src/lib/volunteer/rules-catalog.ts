@@ -48,10 +48,31 @@ export const RULES_CATALOG: RuleSeed[] = [
   },
   {
     kind: 'rescue.resolved_unable',
-    label: 'Rescue closed unable',
-    description: 'Volunteer arrived; rescue could not proceed (wrong info, public space access, etc.).',
+    label: 'Rescue closed unable (admin)',
+    description: 'Admin-only terminal close. Volunteer-side "unable" now escalates instead (see rescue.unable_passed).',
     category: 'rescue',
     suggestedPoints: 1,
+  },
+  {
+    kind: 'rescue.unable_passed',
+    label: 'Rescue passed (couldn\'t finish)',
+    description: 'PR H (2026-05-24). Volunteer Point Person tried, couldn\'t rescue, and honestly passed the case back to the dispatch pool with a reason. Beats sitting on it.',
+    category: 'rescue',
+    suggestedPoints: 1,
+  },
+  {
+    kind: 'rescue.field_note',
+    label: 'Rescue field note',
+    description: 'Volunteer added a written note on a rescue case (context for next responder or social media). Capped at +1/case.',
+    category: 'rescue',
+    suggestedPoints: 1,
+  },
+  {
+    kind: 'rescue.field_photo',
+    label: 'Rescue field photo',
+    description: 'Volunteer attached a photo on a rescue case. Capped at 4 photos / +8 pts then bounded by the per-case +5 ceiling.',
+    category: 'rescue',
+    suggestedPoints: 2,
   },
   {
     kind: 'rescue.decline',

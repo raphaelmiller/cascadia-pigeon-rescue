@@ -537,8 +537,15 @@ model TransportRequest {
   pointPerson          VolunteerProfile? @relation("TransportRequestPointPerson", fields: [pointPersonId], references: [id], onDelete: SetNull)
   pointPersonClaimedAt DateTime?
 
+  // PR H (2026-05-24): resolution audit for the Undo-close feature.
+  resolvedAt          DateTime?
+  resolvedByProfileId String?
+  resolvedReversedAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([resolvedAt])
 }
 
 // ------------------------------------------------------------------
@@ -696,6 +703,20 @@ model RescueCase {
   pointPerson          VolunteerProfile? @relation("RescueCasePointPerson", fields: [pointPersonId], references: [id], onDelete: SetNull)
   pointPersonClaimedAt DateTime?
 
+  // PR H (2026-05-24): "Unable to rescue" no longer closes the case.
+  // When a Point Person hits Unable, we record their reason here,
+  // unset pointPersonId, re-open the case to needs_rescue, and re-dispatch
+  // to the next-nearest volunteers + coordinators.
+  unableReason       String?
+  unablePassedCount  Int     @default(0)
+
+  // Audit trail for any close/resolve action (rescued, escaped, closed_unable).
+  // Powers the "Undo close" feature: while resolvedAt is recent (and reversedAt
+  // is null), the case can be re-opened by the actor or admin.
+  resolvedAt         DateTime?
+  resolvedByProfileId String?
+  resolvedReversedAt DateTime?
+
   updates RescueCaseUpdate[]
   photos  RescueCasePhoto[]
 
@@ -708,6 +729,7 @@ model RescueCase {
 
   @@index([status, createdAt])
   @@index([archivedAt, deletedAt])
+  @@index([resolvedAt])
 }
 
 // Timeline of attempts / observations / status changes on a case.
@@ -721,6 +743,14 @@ model RescueCaseUpdate {
   // if Christina is logging a past attempt after the fact).
   attemptedAt DateTime   @default(now())
   authorName  String?
+  // PR H (2026-05-24): link timeline entries to the volunteer profile that
+  // authored them, so notes added by a Point Person can grant points + show
+  // attribution. Nullable for legacy/admin-authored entries.
+  authorProfileId String?
+  authorProfile   VolunteerProfile? @relation("RescueCaseUpdateAuthor", fields: [authorProfileId], references: [id], onDelete: SetNull)
+  // PR H: tag entries that are volunteer-authored field notes (eligible for
+  // points) vs. system/admin status changes (not eligible).
+  category    String     @default("system") // "system" | "volunteer_note" | "admin"
   createdAt   DateTime   @default(now())
 
   @@index([caseId, attemptedAt])
@@ -898,6 +928,7 @@ model VolunteerProfile {
   assignments    Assignment[]
   pointPersonOnRescue   RescueCase[]      @relation("RescueCasePointPerson")
   pointPersonOnTransport TransportRequest[] @relation("TransportRequestPointPerson")
+  rescueUpdatesAuthored RescueCaseUpdate[] @relation("RescueCaseUpdateAuthor")
   fosterCheckIns FosterCheckIn[]
 
   createdAt DateTime @default(now())
@@ -986,10 +1017,17 @@ model VolunteerEvent {
 
   notes String?
 
+  // PR H (2026-05-24): when a parent action is undone (e.g. case un-closed),
+  // we don't delete the original event — we mark it reversed and write a
+  // matching offsetting event so balance math stays correct.
+  reversedAt     DateTime?
+  reversedReason String?
+
   createdAt DateTime @default(now())
 
   @@index([profileId, createdAt])
   @@index([approvalStatus, createdAt])
+  @@index([refType, refId])
 }
 
 // ========================================================================

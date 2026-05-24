@@ -10,13 +10,20 @@
 //   3. Resolves all Assignment rows on the job
 //   4. Logs a VolunteerEvent with the right point value
 //
-// Point values are intentionally conservative defaults for Phase 1.5
-// (e.g. rescued = 5, delivered = 5). Phase 2's rules engine will let
-// Christina tune these from the admin UI.
+// PR H (2026-05-24):
+//   - 'closed_unable' is NO LONGER a terminal status reachable from the
+//     volunteer surface. A Point Person hitting "Unable to rescue" now
+//     calls passUnable() which escalates the case + re-dispatches.
+//   - Every resolution writes resolvedAt + resolvedByProfileId so the
+//     case can be Undo-closed within a 24h window (admins anytime).
+//   - reverseResolution() un-resolves a case, reverses points by
+//     writing offsetting VolunteerEvent rows + marking originals
+//     reversedAt.
 
 import { prisma } from '@/lib/prisma';
 import { logEvent } from './events';
 import type { JobType } from './dispatch';
+import { dispatchJob } from './dispatch';
 
 export type RescueResolution = 'rescued' | 'escaped_flew_away' | 'closed_unable';
 export type TransportResolution = 'in_transit' | 'delivered' | 'cancelled';
@@ -24,7 +31,7 @@ export type TransportResolution = 'in_transit' | 'delivered' | 'cancelled';
 const POINTS = {
   rescued: 5,
   escaped_flew_away: 2,   // showed up, did the work, bird flew off -- still credit
-  closed_unable: 1,       // showed up, couldn't help -- minimal credit
+  closed_unable: 1,       // admin-only terminal close — minimal credit
   in_transit: 0,          // just a state change, no points yet
   delivered: 5,
   cancelled: 0,
@@ -38,6 +45,18 @@ const POINT_KIND: Record<string, string> = {
   delivered: 'transport.delivered',
   cancelled: 'transport.cancelled',
 };
+
+// Volunteers who PASS a rescue ("unable") get 1 pt for showing up and
+// being honest enough to escalate it back to the pool rather than sit
+// on it. Kind is separate from `closed_unable` so reporting can
+// distinguish "I tried, couldn't, passed it on" from "admin gave up".
+const UNABLE_PASS_POINTS = 1;
+const UNABLE_PASS_KIND = 'rescue.unable_passed';
+
+// Window in which the original actor (or any admin) can undo a
+// resolution from the volunteer portal. Admins can undo anytime from
+// the admin app.
+const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const PHASE1_DISABLED_KINDS = new Set<string>([
   // Add rule-engine-disabled rules here in Phase 2. For now, all the
@@ -71,6 +90,11 @@ export async function resolveJob(args: {
     if (!['rescued', 'escaped_flew_away', 'closed_unable'].includes(resolution)) {
       return { ok: false, reason: 'forbidden' };
     }
+    // closed_unable is now admin-only. From the volunteer portal the
+    // path is `passUnable()`; from the admin app actorProfileId is null.
+    if (resolution === 'closed_unable' && actorProfileId !== null) {
+      return { ok: false, reason: 'forbidden' };
+    }
   } else {
     if (!['in_transit', 'delivered', 'cancelled'].includes(resolution)) {
       return { ok: false, reason: 'forbidden' };
@@ -95,15 +119,33 @@ export async function resolveJob(args: {
   // Atomic transition + cleanup.
   await prisma.$transaction(async (tx) => {
     if (jobType === 'RescueCase') {
-      await tx.rescueCase.update({ where: { id: jobId }, data: { status: resolution } });
+      await tx.rescueCase.update({
+        where: { id: jobId },
+        data: {
+          status: resolution,
+          resolvedAt: now,
+          resolvedByProfileId: actorProfileId,
+          resolvedReversedAt: null,
+        },
+      });
       await tx.rescueCaseUpdate.create({
         data: {
           caseId: jobId,
           text: `Status changed -> ${resolution}`,
+          category: 'system',
+          authorProfileId: actorProfileId,
         },
       });
     } else {
-      await tx.transportRequest.update({ where: { id: jobId }, data: { status: resolution } });
+      await tx.transportRequest.update({
+        where: { id: jobId },
+        data: {
+          status: resolution,
+          resolvedAt: now,
+          resolvedByProfileId: actorProfileId,
+          resolvedReversedAt: null,
+        },
+      });
     }
 
     // Close any open escalations on this job.
@@ -141,3 +183,292 @@ export async function resolveJob(args: {
     pointsAwarded: actorProfileId ? pointValue : 0,
   };
 }
+
+// ---------------------------------------------------------------------
+// PR H: passUnable() — the new "I couldn't rescue this bird" flow.
+// ---------------------------------------------------------------------
+// The current Point Person tried, couldn't get the bird, and is passing
+// the case back to the dispatch pool. Concretely:
+//   1. Append a timeline entry capturing the reason (required, plain text).
+//   2. Mark the actor's Assignment row as `unable` (was: notified|claimed).
+//   3. Clear pointPersonId / pointPersonClaimedAt so the next claimer
+//      doesn't see a stale claim.
+//   4. Set unableReason on the RescueCase + bump unablePassedCount.
+//   5. Keep status = 'needs_rescue' (it never left that — the bird is
+//      still out there).
+//   6. Re-dispatch: re-open Tier 1 with a fresh 15-min timer, push SMS
+//      to the next-nearest pool, and if it's been passed >=2 times OR is
+//      an emergency, open Tier 2 (coordinators) too.
+//   7. Award the actor `rescue.unable_passed` (+1 pt) for showing up and
+//      being honest — beats sitting on a case.
+//
+// Returns reason='not_point_person' if the actor isn't the current PP.
+// ---------------------------------------------------------------------
+export type PassUnableResult =
+  | { ok: true; reDispatched: boolean; tier2Opened: boolean; passedCount: number }
+  | { ok: false; reason: 'not_found' | 'not_point_person' | 'not_active' | 'no_reason' };
+
+export async function passUnable(args: {
+  jobId: string;
+  actorProfileId: string;
+  reason: string;
+}): Promise<PassUnableResult> {
+  const { jobId, actorProfileId, reason } = args;
+  const trimmed = (reason || '').trim();
+  if (!trimmed) return { ok: false, reason: 'no_reason' };
+
+  const c = await prisma.rescueCase.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      status: true,
+      pointPersonId: true,
+      emergencyFlag: true,
+      unablePassedCount: true,
+    },
+  });
+  if (!c) return { ok: false, reason: 'not_found' };
+  if (c.pointPersonId !== actorProfileId) return { ok: false, reason: 'not_point_person' };
+  if (c.status !== 'needs_rescue') return { ok: false, reason: 'not_active' };
+
+  const now = new Date();
+  const newPassedCount = (c.unablePassedCount ?? 0) + 1;
+
+  await prisma.$transaction(async (tx) => {
+    // 1 + 4 + 5: update case (keep needs_rescue, clear PP, stash reason).
+    await tx.rescueCase.update({
+      where: { id: jobId },
+      data: {
+        status: 'needs_rescue',
+        pointPersonId: null,
+        pointPersonClaimedAt: null,
+        figuredOutAt: null,
+        unableReason: trimmed.slice(0, 1000),
+        unablePassedCount: newPassedCount,
+      },
+    });
+
+    // Timeline entry.
+    await tx.rescueCaseUpdate.create({
+      data: {
+        caseId: jobId,
+        text: `Volunteer passed — couldn't rescue: ${trimmed.slice(0, 800)}`,
+        category: 'volunteer_note',
+        authorProfileId: actorProfileId,
+      },
+    });
+
+    // 2: mark the actor's Assignment row as unable (audit trail).
+    await tx.assignment.updateMany({
+      where: { jobType: 'RescueCase', jobId, profileId: actorProfileId, status: { in: ['notified', 'claimed'] } },
+      data: { status: 'unable', resolvedAt: now },
+    });
+
+    // Close any open Escalation tiers — dispatchJob will reopen Tier 1
+    // (and Tier 2 if needed) fresh.
+    await tx.escalation.updateMany({
+      where: { jobType: 'RescueCase', jobId, closedAt: null },
+      data: { closedAt: now, outcome: 'passed_unable' },
+    });
+  });
+
+  // 7: award +1 to the actor for honest hand-off.
+  await logEvent({
+    profileId: actorProfileId,
+    category: 'rescue',
+    kind: UNABLE_PASS_KIND,
+    pointDelta: UNABLE_PASS_POINTS,
+    refType: 'RescueCase',
+    refId: jobId,
+    notes: trimmed.slice(0, 500),
+  });
+
+  // 6: re-dispatch. If this case has been passed >=2 times OR is an
+  // emergency, force tier 2 by flipping emergencyFlag for the dispatch
+  // pass (we don't persist that — dispatchJob reads emergencyFlag from
+  // the case itself, so we use the natural emergency promotion below).
+  // Simpler: just call dispatchJob; the engine already opens Tier 2 if
+  // emergencyFlag OR (deadline - now) < 30 min.
+  let tier2Opened = false;
+  let reDispatched = false;
+  try {
+    const result = await dispatchJob('RescueCase', jobId, {
+      reason: newPassedCount >= 2 ? 'unable_repassed' : 'unable_passed',
+    });
+    reDispatched = result.assignmentsCreated > 0 || result.escalationsOpened > 0;
+    tier2Opened = result.isEmergency;
+
+    // If the case has been passed >=2 times, force-open Tier 2 even if
+    // it's not flagged emergency. Two volunteers couldn't get the bird;
+    // a coordinator should weigh in.
+    if (newPassedCount >= 2 && !tier2Opened) {
+      const existingT2 = await prisma.escalation.findFirst({
+        where: { jobType: 'RescueCase', jobId, tier: 2, closedAt: null },
+      });
+      if (!existingT2) {
+        await prisma.escalation.create({
+          data: {
+            jobType: 'RescueCase',
+            jobId,
+            tier: 2,
+            expiresAt: new Date(now.getTime() + 15 * 60 * 1000),
+          },
+        });
+        tier2Opened = true;
+      }
+    }
+  } catch (err) {
+    // Don't fail the entire passUnable if dispatch sputters — the case
+    // is in a valid state (needs_rescue, no PP), it just won't have
+    // fresh SMS fan-out. Admin will see the case in the queue.
+    console.error('[passUnable] re-dispatch failed', err);
+  }
+
+  return { ok: true, reDispatched, tier2Opened, passedCount: newPassedCount };
+}
+
+// ---------------------------------------------------------------------
+// PR H: reverseResolution() — undo a close.
+// ---------------------------------------------------------------------
+// `actorProfileId === null` ⇒ admin override (no time window enforced).
+// Otherwise the actor must be the volunteer who originally resolved
+// the job AND it must be within UNDO_WINDOW_MS.
+//
+// We:
+//   1. Flip status back to needs_rescue (rescue) or open (transport).
+//   2. Set resolvedReversedAt = now (so we know it was undone).
+//   3. Find every non-reversed VolunteerEvent for (refType, refId) and
+//      either zero them out OR write an offsetting event. We choose
+//      offsetting so the original points history is preserved + the
+//      audit reads cleanly.
+//   4. Append a timeline entry on rescues.
+//   5. Re-dispatch the case (rescue only — transports don't auto-dispatch).
+// ---------------------------------------------------------------------
+export type ReverseResult =
+  | { ok: true; pointsReversed: number; newStatus: string }
+  | { ok: false; reason: 'not_found' | 'not_resolved' | 'forbidden' | 'window_expired' };
+
+export async function reverseResolution(args: {
+  jobType: JobType;
+  jobId: string;
+  actorProfileId: string | null;
+  reason?: string;
+}): Promise<ReverseResult> {
+  const { jobType, jobId, actorProfileId, reason } = args;
+  const now = new Date();
+  const reasonText = (reason || '').trim().slice(0, 500) || 'Closed by accident';
+
+  let job: { status: string; resolvedAt: Date | null; resolvedByProfileId: string | null } | null;
+  if (jobType === 'RescueCase') {
+    job = await prisma.rescueCase.findUnique({
+      where: { id: jobId },
+      select: { status: true, resolvedAt: true, resolvedByProfileId: true },
+    });
+  } else {
+    job = await prisma.transportRequest.findUnique({
+      where: { id: jobId },
+      select: { status: true, resolvedAt: true, resolvedByProfileId: true },
+    });
+  }
+  if (!job) return { ok: false, reason: 'not_found' };
+  if (!job.resolvedAt) return { ok: false, reason: 'not_resolved' };
+
+  // Non-admin actors must be the original resolver AND within the window.
+  if (actorProfileId !== null) {
+    if (job.resolvedByProfileId !== actorProfileId) {
+      return { ok: false, reason: 'forbidden' };
+    }
+    if (now.getTime() - job.resolvedAt.getTime() > UNDO_WINDOW_MS) {
+      return { ok: false, reason: 'window_expired' };
+    }
+  }
+
+  // Find original (non-reversed) events to offset.
+  const originals = await prisma.volunteerEvent.findMany({
+    where: { refType: jobType, refId: jobId, reversedAt: null, pointDelta: { not: 0 } },
+  });
+
+  const newStatus = jobType === 'RescueCase' ? 'needs_rescue' : 'open';
+
+  await prisma.$transaction(async (tx) => {
+    if (jobType === 'RescueCase') {
+      await tx.rescueCase.update({
+        where: { id: jobId },
+        data: {
+          status: newStatus,
+          resolvedReversedAt: now,
+          pointPersonId: null,
+          pointPersonClaimedAt: null,
+          figuredOutAt: null,
+        },
+      });
+      await tx.rescueCaseUpdate.create({
+        data: {
+          caseId: jobId,
+          text: `Resolution reversed (${reasonText}) — case re-opened.`,
+          category: 'system',
+          authorProfileId: actorProfileId,
+        },
+      });
+    } else {
+      await tx.transportRequest.update({
+        where: { id: jobId },
+        data: {
+          status: newStatus,
+          resolvedReversedAt: now,
+          pointPersonId: null,
+          pointPersonClaimedAt: null,
+          figuredOutAt: null,
+        },
+      });
+    }
+
+    // Mark originals reversed + offset.
+    for (const ev of originals) {
+      await tx.volunteerEvent.update({
+        where: { id: ev.id },
+        data: { reversedAt: now, reversedReason: reasonText },
+      });
+      await tx.volunteerEvent.create({
+        data: {
+          profileId: ev.profileId,
+          category: ev.category,
+          kind: ev.kind + '.reversed',
+          pointDelta: -ev.pointDelta,
+          approvalStatus: 'auto',
+          refType: ev.refType,
+          refId: ev.refId,
+          notes: `Reversed: ${reasonText}`,
+        },
+      });
+    }
+
+    // Re-open any assignments that were resolved by this resolution so
+    // they show up in the volunteer's active list again.
+    await tx.assignment.updateMany({
+      where: { jobType, jobId, status: 'resolved' },
+      data: { status: 'notified', resolvedAt: null },
+    });
+  });
+
+  // Re-dispatch rescue cases so the pool gets a fresh notification.
+  if (jobType === 'RescueCase') {
+    try {
+      await dispatchJob('RescueCase', jobId, { reason: 'undo_close' });
+    } catch (err) {
+      console.error('[reverseResolution] re-dispatch failed', err);
+    }
+  }
+
+  const pointsReversed = originals.reduce((sum, ev) => sum + ev.pointDelta, 0);
+  return { ok: true, pointsReversed, newStatus };
+}
+
+/** Helper: is this resolution still inside the volunteer undo window? */
+export function canVolunteerUndo(resolvedAt: Date | null, resolvedReversedAt: Date | null): boolean {
+  if (!resolvedAt) return false;
+  if (resolvedReversedAt) return false;
+  return Date.now() - resolvedAt.getTime() <= UNDO_WINDOW_MS;
+}
+
+export const UNDO_WINDOW_HOURS = UNDO_WINDOW_MS / (60 * 60 * 1000);

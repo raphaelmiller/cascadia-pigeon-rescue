@@ -1,0 +1,285 @@
+// PR H (2026-05-24) — Volunteer-facing rescue case detail page.
+//
+// Surface for the active Point Person (or any volunteer paged on the
+// case) to:
+//   - See the bird description, location, reporter info, timeline.
+//   - Add field NOTES + PHOTOS (with points, capped per case).
+//   - Hit "Unable to rescue" with a REQUIRED REASON — which
+//     re-dispatches the case + opens Tier 2 on the 2nd pass instead
+//     of terminating it.
+//   - Undo their own close within 24h.
+//
+// Admin-side detail page (/rescue/cases/[id]) is unchanged in spirit
+// but also gets undo + escalate semantics through job-resolution.ts.
+
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { requireVolunteer } from '@/lib/volunteer/auth';
+import { prisma } from '@/lib/prisma';
+import {
+  passUnableAction,
+  addRescueNoteAction,
+  undoResolutionAction,
+} from '@/app/(volunteer)/v/actions';
+import { canVolunteerUndo, UNDO_WINDOW_HOURS } from '@/lib/volunteer/job-resolution';
+import { Siren, AlertTriangle, FileText, Camera, RotateCcw } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
+
+const STATUS_LABEL: Record<string, string> = {
+  needs_rescue: '🚨 Needs rescue',
+  rescued: '✅ Rescued',
+  escaped_flew_away: '💨 Escaped',
+  closed_unable: '❌ Closed (admin)',
+};
+
+export default async function VolunteerRescueCasePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ msg?: string }>;
+}) {
+  const v = await requireVolunteer();
+  const { id } = await params;
+  const sp = await searchParams;
+
+  const [c, myAssignment] = await Promise.all([
+    prisma.rescueCase.findUnique({
+      where: { id },
+      include: {
+        updates: { orderBy: { attemptedAt: 'desc' }, take: 30 },
+        photos: { orderBy: { createdAt: 'asc' } },
+      },
+    }),
+    prisma.assignment.findFirst({
+      where: { jobType: 'RescueCase', jobId: id, profileId: v.profileId },
+      select: { id: true, status: true },
+    }),
+  ]);
+  if (!c) notFound();
+  if (!myAssignment) {
+    // Volunteer isn't paged on this case — gentle gate, not a 404.
+    return (
+      <div className="space-y-4">
+        <Link href="/rescue" className="text-sm text-teal-700 hover:underline">← Rescue</Link>
+        <div className="rounded-2xl bg-white shadow ring-1 ring-amber-200 p-5">
+          <h1 className="text-lg font-semibold text-amber-900">You&apos;re not on this case</h1>
+          <p className="text-sm text-amber-800 mt-1">
+            Only volunteers who were paged on a rescue can view its case page. If you should have been notified, message a coordinator.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isPointPerson = c.pointPersonId === v.profileId;
+  const isResolved = ['rescued', 'escaped_flew_away', 'closed_unable'].includes(c.status);
+  const canUndo = isResolved && c.resolvedByProfileId === v.profileId &&
+    canVolunteerUndo(c.resolvedAt, c.resolvedReversedAt);
+
+  return (
+    <div className="space-y-4">
+      <Link href="/rescue" className="text-sm text-teal-700 hover:underline">← Rescue</Link>
+
+      {/* Status banner */}
+      {sp.msg && (
+        <div className={`rounded-xl ring-1 px-3 py-2 text-sm ${
+          sp.msg === 'note_added' ? 'bg-emerald-50 ring-emerald-200 text-emerald-900' :
+          sp.msg === 'unable_needs_reason' ? 'bg-amber-50 ring-amber-200 text-amber-900' :
+          sp.msg === 'note_empty' ? 'bg-amber-50 ring-amber-200 text-amber-900' :
+          'bg-gray-50 ring-gray-200 text-gray-800'
+        }`}>
+          {sp.msg === 'note_added' && '✅ Added — thanks for the detail.'}
+          {sp.msg === 'unable_needs_reason' && '⚠️ Add a short reason so the next volunteer has context.'}
+          {sp.msg === 'note_empty' && '⚠️ Add text or at least one photo.'}
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-5">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Siren size={22} className="text-red-600" />
+          <h1 className="text-xl font-semibold text-gray-900 flex-grow">
+            {c.birdDescription || c.issue || 'Rescue case'}
+          </h1>
+          <span className="text-xs font-semibold rounded-full px-2 py-0.5 bg-gray-100 text-gray-800">
+            {STATUS_LABEL[c.status] ?? c.status}
+          </span>
+        </div>
+        {c.location && <p className="text-sm text-gray-700 mt-2">📍 {c.location}</p>}
+        {c.address && <p className="text-sm text-gray-600">{c.address}</p>}
+        {c.issue && <p className="text-sm text-gray-700 mt-1">⚠️ {c.issue}</p>}
+        <p className="text-xs text-gray-500 mt-2">
+          Called in {c.dateCalledIn.toLocaleString()}
+          {c.unablePassedCount > 0 && (
+            <> · <span className="text-amber-700 font-semibold">passed {c.unablePassedCount}×</span></>
+          )}
+        </p>
+        {c.reporterName && (
+          <p className="text-xs text-gray-600 mt-1">
+            Reporter: <strong>{c.reporterName}</strong>
+            {c.reporterPhone && <> · <a href={`tel:${c.reporterPhone}`} className="text-teal-700 hover:underline">{c.reporterPhone}</a></>}
+          </p>
+        )}
+      </div>
+
+      {/* Undo block */}
+      {canUndo && (
+        <form action={undoResolutionAction} className="rounded-2xl bg-amber-50 shadow ring-1 ring-amber-300 p-4">
+          <input type="hidden" name="jobType" value="RescueCase" />
+          <input type="hidden" name="jobId" value={c.id} />
+          <div className="flex items-start gap-3">
+            <RotateCcw size={20} className="text-amber-700 flex-shrink-0 mt-0.5" />
+            <div className="flex-grow">
+              <p className="text-sm font-semibold text-amber-900">
+                Closed by accident?
+              </p>
+              <p className="text-xs text-amber-800 mt-1">
+                You can un-close this case for the next {Math.round(UNDO_WINDOW_HOURS)} hours after closing.
+                It will re-open and re-notify the volunteer pool.
+              </p>
+              <input
+                name="reason"
+                placeholder="Optional: what happened"
+                className="block w-full mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm"
+              />
+              <button
+                type="submit"
+                className="mt-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+              >
+                Un-close + re-open
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* Photos */}
+      {c.photos.length > 0 && (
+        <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Photos ({c.photos.length})</h2>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {c.photos.map(p => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={p.id} src={p.url} alt="" className="w-full h-24 object-cover rounded-lg" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Notes & photos form (anchor: #notes) */}
+      {!isResolved && (
+        <form
+          id="notes"
+          action={addRescueNoteAction}
+          className="rounded-2xl bg-white shadow ring-1 ring-blue-200 p-5 space-y-3 scroll-mt-20"
+          encType="multipart/form-data"
+        >
+          <input type="hidden" name="jobId" value={c.id} />
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <FileText size={18} className="text-blue-600" /> Add field notes & photos
+          </h2>
+          <p className="text-xs text-gray-600">
+            Notes help the next volunteer if you can&apos;t finish, and photos can land on CPR social media.
+            <strong> +1 pt per note, +2 pts per photo</strong> — capped at +5 per case.
+          </p>
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1">What did you see?</span>
+            <textarea
+              name="text"
+              rows={3}
+              placeholder="e.g. 'Bird is in the back parking lot under the dumpster. Hopping not flying — likely wing. Owner of building was helpful.'"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1 flex items-center gap-1">
+              <Camera size={12} /> Photos (optional)
+            </span>
+            <input
+              type="file"
+              name="photos"
+              multiple
+              accept="image/*"
+              className="block w-full text-sm"
+            />
+          </label>
+          <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
+            Save note
+          </button>
+        </form>
+      )}
+
+      {/* Unable form (anchor: #unable) — Point Person only, active cases only. */}
+      {isPointPerson && c.status === 'needs_rescue' && (
+        <form
+          id="unable"
+          action={passUnableAction}
+          className="rounded-2xl bg-white shadow ring-1 ring-amber-300 p-5 space-y-3 scroll-mt-20"
+        >
+          <input type="hidden" name="jobId" value={c.id} />
+          <h2 className="text-base font-semibold text-amber-900 flex items-center gap-2">
+            <AlertTriangle size={18} className="text-amber-600" /> Unable to rescue — pass it on
+          </h2>
+          <p className="text-xs text-gray-700">
+            This does <strong>not</strong> close the case. It releases your claim, sends the
+            case back to the pool, and pings the next-nearest volunteers + a coordinator.
+            The next person needs your context — write 1–2 sentences:
+          </p>
+          <ul className="text-[11px] text-gray-600 list-disc list-inside space-y-0.5">
+            <li>Couldn&apos;t locate the bird</li>
+            <li>Bird flew off / moved before I arrived</li>
+            <li>No access to the property / owner refused</li>
+            <li>Safety risk (busy road, dog, etc.)</li>
+            <li>Need help — escalate to a coordinator</li>
+          </ul>
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1">
+              Why can&apos;t you rescue? <span className="text-red-600">required</span>
+            </span>
+            <textarea
+              name="reason"
+              required
+              minLength={4}
+              rows={3}
+              placeholder="e.g. 'Got there but bird had flown to the roof of the auto shop. Last seen heading east.'"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            />
+          </label>
+          <p className="text-[11px] text-gray-600">
+            You&apos;ll get <strong>+1 pt</strong> for showing up and being honest about handing it off.
+          </p>
+          <button type="submit" className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
+            Pass to next volunteer
+          </button>
+        </form>
+      )}
+
+      {/* Timeline */}
+      <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+          Timeline ({c.updates.length})
+        </h2>
+        {c.updates.length === 0 ? (
+          <p className="text-sm text-gray-500">No updates yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {c.updates.map(u => (
+              <li key={u.id} className="py-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                  <span>{u.attemptedAt.toLocaleString()}</span>
+                  {u.category === 'volunteer_note' && (
+                    <span className="rounded-full px-1.5 py-0 text-[10px] bg-blue-100 text-blue-800 font-semibold">FIELD NOTE</span>
+                  )}
+                  {u.authorName && <span>· {u.authorName}</span>}
+                </div>
+                <p className="mt-1 text-sm whitespace-pre-wrap">{u.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
