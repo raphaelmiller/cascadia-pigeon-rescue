@@ -2,8 +2,22 @@
 
 // Server actions for the volunteer-portal Availability + Shifts page.
 //
+// PR H (2026-05-24) — rewritten to accept the new form shape:
+//   - startDate (yyyy-mm-dd) + endDate (yyyy-mm-dd) — defines the span
+//   - startTime (HH:MM)      + endTime  (HH:MM)    — defines the daily window
+//   - recurring (checkbox)   + byDays[] (SU/MO/...) — optional weekly repeat
+//   - customRrule (advanced) — overrides everything when present
+//
+// We compile to the existing VolunteerAvailability row shape:
+//   - kind=one_time / weekly / custom (computed; no UI exposes "always" or
+//     "indefinite" anymore — the old kind values are still supported by
+//     the engine for backward compat).
+//   - startsAt / endsAt = absolute datetimes of the first window
+//   - rrule = compiled RRULE (or pasted custom) or null
+//   - effectiveUntil = optional cap on recurrence
+//
 // Volunteers manage their OWN availability here. They cannot see or
-// edit anyone else's availability -- queries are always scoped by
+// edit anyone else's availability — queries are always scoped by
 // profileId from requireVolunteer().
 
 import { redirect } from 'next/navigation';
@@ -12,75 +26,130 @@ import { requireVolunteer } from '@/lib/volunteer/auth';
 import { prisma } from '@/lib/prisma';
 import { expandRange } from '@/lib/scheduling';
 
-const VALID_KINDS = ['one_time', 'weekly', 'indefinite', 'always', 'custom'] as const;
+// PR H: 'foster_oncall' dropped from the UI (not a real CPR thing). We
+// still accept it on writes so any historical rows + URL deep-links
+// don't reject — but no surface emits it anymore.
 const VALID_SCOPES = ['any', 'rescue', 'transport', 'foster_oncall'] as const;
-
-type Kind = typeof VALID_KINDS[number];
 type Scope = typeof VALID_SCOPES[number];
 
-function parseDate(raw: string): Date | null {
+const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const;
+
+function parseDateOnly(raw: string): { y: number; m: number; d: number } | null {
   if (!raw) return null;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return { y: Number(m[1]), m: Number(m[2]) - 1, d: Number(m[3]) };
 }
 
-function compileRRule(kind: Kind, startsAt: Date, customRrule?: string, byDays?: string): string | null {
-  // 'always' & 'one_time' have no rrule.
-  if (kind === 'one_time' || kind === 'always') return null;
-  if (kind === 'custom') {
-    const s = (customRrule || '').trim();
-    return s || null;
+function parseTimeOnly(raw: string): { h: number; mi: number } | null {
+  if (!raw) return null;
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return { h: Number(m[1]), mi: Number(m[2]) };
+}
+
+function combineDateTime(d: { y: number; m: number; d: number }, t: { h: number; mi: number }): Date {
+  return new Date(d.y, d.m, d.d, t.h, t.mi, 0, 0);
+}
+
+function parseEffectiveUntil(raw: string): Date | null {
+  const parts = parseDateOnly(raw);
+  if (!parts) return null;
+  // Use end of that day so the cap is inclusive.
+  return new Date(parts.y, parts.m, parts.d, 23, 59, 59, 999);
+}
+
+type CompiledForm = {
+  kind: 'one_time' | 'weekly' | 'custom';
+  startsAt: Date;
+  endsAt: Date;
+  rrule: string | null;
+  effectiveUntil: Date | null;
+};
+
+function compileForm(fd: FormData): { ok: true; out: CompiledForm } | { ok: false; reason: 'invalid_dates' | 'invalid_time' } {
+  const startDate = parseDateOnly(String(fd.get('startDate') ?? ''));
+  const endDateRaw = String(fd.get('endDate') ?? '').trim();
+  const endDate = endDateRaw ? parseDateOnly(endDateRaw) : startDate;
+  const startTime = parseTimeOnly(String(fd.get('startTime') ?? ''));
+  const endTime = parseTimeOnly(String(fd.get('endTime') ?? ''));
+
+  if (!startDate || !endDate) return { ok: false, reason: 'invalid_dates' };
+  if (!startTime || !endTime) return { ok: false, reason: 'invalid_time' };
+
+  // First-window absolute times: anchor on the START date.
+  const startsAt = combineDateTime(startDate, startTime);
+  let endsAt: Date;
+
+  // Daily window must be valid (end > start within a day).
+  const dailyEnd = combineDateTime(startDate, endTime);
+  if (dailyEnd.getTime() <= startsAt.getTime()) {
+    return { ok: false, reason: 'invalid_time' };
   }
-  // weekly + indefinite use the same rrule shape; difference is just
-  // lifecycle/UI semantics, the engine treats them identically.
-  // BYDAY selection is optional -- if not provided, default to the
-  // weekday of startsAt.
-  const days = (byDays || '').trim();
-  if (days) {
-    return `FREQ=WEEKLY;BYDAY=${days}`;
+
+  // For a multi-day non-recurring stretch, the "block" runs from
+  // startDate@startTime to endDate@endTime as one continuous span.
+  if (startDate.y === endDate.y && startDate.m === endDate.m && startDate.d === endDate.d) {
+    endsAt = dailyEnd;
+  } else {
+    endsAt = combineDateTime(endDate, endTime);
+    if (endsAt.getTime() <= startsAt.getTime()) {
+      return { ok: false, reason: 'invalid_dates' };
+    }
   }
-  const dayNames = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-  return `FREQ=WEEKLY;BYDAY=${dayNames[startsAt.getDay()]}`;
+
+  // RRULE compilation.
+  const recurring = String(fd.get('recurring') ?? '') === '1';
+  const customRrule = String(fd.get('customRrule') ?? '').trim();
+  const byDaysRaw = fd.getAll('byDays')
+    .map(v => String(v).toUpperCase())
+    .filter(v => (DAY_CODES as readonly string[]).includes(v));
+
+  let rrule: string | null = null;
+  let kind: 'one_time' | 'weekly' | 'custom' = 'one_time';
+
+  if (customRrule) {
+    rrule = customRrule;
+    kind = 'custom';
+  } else if (recurring) {
+    // Default to weekdays in the date range if user didn't tick days.
+    let days = byDaysRaw;
+    if (days.length === 0) {
+      const set = new Set<string>();
+      // Walk start to end inclusive.
+      const cursor = new Date(startDate.y, startDate.m, startDate.d);
+      const last = new Date(endDate.y, endDate.m, endDate.d);
+      while (cursor.getTime() <= last.getTime()) {
+        set.add(DAY_CODES[cursor.getDay()]);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      days = Array.from(set);
+    }
+    rrule = `FREQ=WEEKLY;BYDAY=${days.join(',')}`;
+    kind = 'weekly';
+  }
+
+  const effectiveUntil = parseEffectiveUntil(String(fd.get('effectiveUntil') ?? ''));
+
+  return { ok: true, out: { kind, startsAt, endsAt, rrule, effectiveUntil } };
 }
 
 export async function saveAvailability(formData: FormData): Promise<void> {
   const v = await requireVolunteer();
   const id = String(formData.get('id') ?? '').trim();
-  const kindRaw = String(formData.get('kind') ?? '');
+
+  // Scope.
   const scopeRaw = String(formData.get('scope') ?? 'any');
-  const kind = (VALID_KINDS as readonly string[]).includes(kindRaw) ? kindRaw as Kind : 'one_time';
   const scope = (VALID_SCOPES as readonly string[]).includes(scopeRaw) ? scopeRaw as Scope : 'any';
 
-  const startsAtRaw = String(formData.get('startsAt') ?? '');
-  const endsAtRaw = String(formData.get('endsAt') ?? '');
-  const effectiveUntilRaw = String(formData.get('effectiveUntil') ?? '');
-  const byDays = String(formData.get('byDays') ?? '');
-  const customRrule = String(formData.get('customRrule') ?? '');
+  const compiled = compileForm(formData);
+  if (!compiled.ok) {
+    redirect(`/shifts?msg=${compiled.reason}`);
+  }
+  const { kind, startsAt, endsAt, rrule, effectiveUntil } = compiled.out;
   const notes = String(formData.get('notes') ?? '').trim() || null;
 
-  // 'always' doesn't need start/end -- synthesize a window so the row is valid.
-  let startsAt: Date;
-  let endsAt: Date;
-  if (kind === 'always') {
-    startsAt = new Date('2000-01-01T00:00:00Z');
-    endsAt = new Date('2100-01-01T00:00:00Z');
-  } else {
-    const s = parseDate(startsAtRaw);
-    const e = parseDate(endsAtRaw);
-    if (!s || !e) {
-      redirect('/shifts?msg=invalid_dates');
-    }
-    if (e.getTime() <= s.getTime()) {
-      redirect('/shifts?msg=invalid_dates');
-    }
-    startsAt = s;
-    endsAt = e;
-  }
-
-  const rrule = compileRRule(kind, startsAt, customRrule, byDays);
-  const effectiveUntil = parseDate(effectiveUntilRaw);
-
-  // Conflict warning (advisory only -- not a block). Volunteers ARE
+  // Conflict warning (advisory only — not a block). Volunteers ARE
   // allowed to set overlapping blocks (e.g. broad weekly + narrow
   // one-time for an extra shift), but we surface a warning so they
   // don't accidentally double-book themselves.

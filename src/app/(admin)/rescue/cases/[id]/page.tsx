@@ -13,6 +13,7 @@ import { H1, H2, Card, Pill, Btn, Field, inputClass, Empty } from '@/components/
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
 import { requireOperator } from '@/lib/auth';
 import { saveUploads } from '@/lib/uploads';
+import { reverseResolution } from '@/lib/volunteer/job-resolution';
 import {
   RESCUE_CASE_STATUS_LABEL,
   RESCUE_CASE_STATUS_TONE,
@@ -81,13 +82,41 @@ async function updateCase(caseId: string, formData: FormData) {
 async function setStatus(caseId: string, status: string) {
   'use server';
   await requireOperator();
-  await prisma.rescueCase.update({ where: { id: caseId }, data: { status } });
+  // PR H: every status change writes the resolution audit fields too so
+  // the undo flow has something to look at. Setting a non-terminal status
+  // (needs_rescue) clears them.
+  const isTerminal = ['rescued', 'escaped_flew_away', 'closed_unable'].includes(status);
+  await prisma.rescueCase.update({
+    where: { id: caseId },
+    data: {
+      status,
+      resolvedAt: isTerminal ? new Date() : null,
+      resolvedByProfileId: null, // admin action
+      resolvedReversedAt: null,
+    },
+  });
   // Log it as a timeline entry so the history is preserved.
   await prisma.rescueCaseUpdate.create({
     data: {
       caseId,
       text: `Status changed → ${RESCUE_CASE_STATUS_LABEL[status] || status}`,
+      category: 'admin',
     },
+  });
+  redirect(`/rescue/cases/${caseId}`);
+}
+
+// PR H: admin un-close. Calls into the shared reverseResolution() so
+// behavior matches what volunteers see when they hit Undo from the portal.
+async function adminUndoResolution(caseId: string, formData: FormData) {
+  'use server';
+  await requireOperator();
+  const reason = String(formData.get('reason') || '').trim() || 'Admin reverted';
+  await reverseResolution({
+    jobType: 'RescueCase',
+    jobId: caseId,
+    actorProfileId: null, // admin: no window enforcement, no actor-points
+    reason,
   });
   redirect(`/rescue/cases/${caseId}`);
 }
@@ -247,8 +276,23 @@ export default async function RescueCaseDetail({
         <Card>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-gray-700">Case closed. To reopen:</span>
-            <form action={setStatus.bind(null, id, 'needs_rescue')}>
-              <Btn type="submit" variant="ghost">Reopen</Btn>
+            <form action={adminUndoResolution.bind(null, id)} className="flex items-center gap-2 flex-wrap">
+              <input name="reason" placeholder="Reason (optional)" className={`${inputClass} w-auto`} />
+              <Btn type="submit" variant="ghost">Un-close + re-dispatch</Btn>
+            </form>
+          </div>
+        </Card>
+      )}
+
+      {/* PR H: admins can always un-close ANY resolved case (rescued / escaped
+          / closed_unable), which reverses points + re-opens the case + re-dispatches. */}
+      {['rescued', 'escaped_flew_away'].includes(c.status) && (
+        <Card>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-gray-700">Closed by accident? Admin override:</span>
+            <form action={adminUndoResolution.bind(null, id)} className="flex items-center gap-2 flex-wrap">
+              <input name="reason" placeholder="Reason" className={`${inputClass} w-auto`} />
+              <Btn type="submit" variant="ghost">Un-close + reverse points</Btn>
             </form>
           </div>
         </Card>

@@ -2,6 +2,7 @@
 // dashboard. Shows the urgency at a glance, the action buttons,
 // and the Point Person state.
 
+import Link from 'next/link';
 import {
   claimPointPersonAction,
   declineAction,
@@ -9,7 +10,7 @@ import {
   resolveJobAction,
 } from '@/app/(volunteer)/v/actions';
 import type { OpenAssignment } from '@/lib/volunteer/assignments-query';
-import { Siren, Truck, AlertTriangle, Check } from 'lucide-react';
+import { Siren, Truck, AlertTriangle, Check, FileText } from 'lucide-react';
 
 function fmtDeadline(d: Date | null): string {
   if (!d) return '';
@@ -142,7 +143,22 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                   <>
                     <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="rescued" label="Rescued" tone="emerald" />
                     <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="escaped_flew_away" label="Escaped" tone="yellow" />
-                    <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="closed_unable" label="Unable" tone="gray" />
+                    {/* PR H: "Unable" now opens a reason form on the case page that
+                        re-dispatches the case rather than closing it. */}
+                    <Link
+                      href={`/rescue/case/${a.jobId}#unable`}
+                      className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3 py-1.5 ring-1 ring-gray-300"
+                      title="Couldn't rescue — pass to next volunteer"
+                    >
+                      Unable — pass on
+                    </Link>
+                    <Link
+                      href={`/rescue/case/${a.jobId}#notes`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
+                      title="Add field notes / photos"
+                    >
+                      <FileText size={12} /> Notes & photos
+                    </Link>
                   </>
                 ) : (
                   <>

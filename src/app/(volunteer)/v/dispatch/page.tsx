@@ -5,9 +5,10 @@ import { redirect } from 'next/navigation';
 import { requireVolunteer } from '@/lib/volunteer/auth';
 import { getDispatchBoard, type BoardJob } from '@/lib/volunteer/dispatch-board';
 import { getPendingReviews, type PendingReview } from '@/lib/volunteer/pending-reviews';
+import { countOpenConcerns } from '@/lib/volunteer/concerns';
 import { redispatchAction, manualClaimAction, forceEscalateAction, approvePendingAction, rejectPendingAction } from './actions';
 import { SystemStatusBanner } from '@/components/volunteer/SystemStatusBanner';
-import { Siren, Truck, AlertTriangle, Clock, RefreshCw, FastForward, Inbox } from 'lucide-react';
+import { Siren, Truck, AlertTriangle, Clock, RefreshCw, FastForward, Inbox, Eye } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,9 +60,10 @@ export default async function DispatchBoardPage({
   const v = await requireVolunteer();
   if (!v.isCoordinator) redirect('/');
 
-  const [jobs, pending] = await Promise.all([
+  const [jobs, pending, concernsCount] = await Promise.all([
     getDispatchBoard(),
     getPendingReviews(),
+    countOpenConcerns(),
   ]);
   const emergencies = jobs.filter(j => j.emergencyFlag);
   const escalated   = jobs.filter(j => !j.emergencyFlag && (j.currentTier ?? 0) >= 2);
@@ -100,6 +102,21 @@ export default async function DispatchBoardPage({
             : `${jobs.length} open job${jobs.length === 1 ? '' : 's'}. ${emergencies.length} emergency · ${escalated.length} escalated · ${open.length} routine.`}
         </p>
       </div>
+
+      {concernsCount > 0 && (
+        <a
+          href="/dispatch/concerns"
+          className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 shadow ring-1 ring-amber-300 hover:ring-amber-400 hover:bg-amber-100 px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Eye size={18} className="text-amber-700" />
+            <span className="text-sm font-semibold text-amber-900">
+              Volunteer-reported concerns ({concernsCount})
+            </span>
+          </div>
+          <span className="text-xs text-amber-800">View feed →</span>
+        </a>
+      )}
 
       {pending.length > 0 && (
         <div>
