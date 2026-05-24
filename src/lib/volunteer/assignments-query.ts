@@ -6,6 +6,19 @@
 // tier indicator).
 
 import { prisma } from '@/lib/prisma';
+import {
+  TAKEOVER_THRESHOLD_EMERGENCY_MS,
+  TAKEOVER_THRESHOLD_ROUTINE_MS,
+} from './job-resolution';
+
+function mostRecent(dates: Array<Date | null | undefined>): Date | null {
+  let best: Date | null = null;
+  for (const d of dates) {
+    if (!d) continue;
+    if (!best || d.getTime() > best.getTime()) best = d;
+  }
+  return best;
+}
 
 export type OpenAssignment = {
   assignmentId: string;
@@ -21,12 +34,22 @@ export type OpenAssignment = {
   pointPersonId: string | null;
   pointPersonName: string | null;
   pointPersonIsMe: boolean;
+  pointPersonClaimedAt: Date | null;
   // Whether the job has been resolved or marked figured-out
   figuredOutAt: Date | null;
   resolvedStatus: string | null; // 'rescued' | 'delivered' | etc.
   notifiedAt: Date;
   // Highest open tier on this job (1, 2, or 3). Null if no open escalation.
   currentTier: number | null;
+  // PR I (2026-05-24): non-PP engagement state.
+  iAmOnStandby: boolean;
+  followerCount: number;
+  lastActivityAt: Date | null;
+  // Milliseconds since the last activity. Null if no activity timestamp yet.
+  idleMs: number | null;
+  // True once idle > threshold for this job's urgency tier. Unlocks the
+  // "Take over" CTA on non-PP cards.
+  takeoverUnlocked: boolean;
 };
 
 export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssignment[]> {
@@ -53,6 +76,7 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
         id: true, status: true, birdDescription: true, issue: true, location: true,
         emergencyFlag: true, deadline: true, figuredOutAt: true,
         pointPersonId: true,
+        pointPersonClaimedAt: true,
         pointPerson: { select: { id: true, name: true } },
       },
     }),
@@ -63,6 +87,7 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
         toAddress: true, description: true, pickupBy: true, deliverBy: true,
         emergencyFlag: true, deadline: true, figuredOutAt: true,
         pointPersonId: true,
+        pointPersonClaimedAt: true,
         pointPerson: { select: { id: true, name: true } },
       },
     }),
@@ -86,6 +111,34 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
     if (prev === undefined || e.tier > prev) tierByJob.set(key, e.tier);
   }
 
+  // PR I: follower counts across all the jobs (one query).
+  const followers = await prisma.assignment.groupBy({
+    by: ['jobType', 'jobId'],
+    where: {
+      standbyAt: { not: null },
+      status: { in: ['notified', 'claimed'] },
+      OR: [
+        { jobType: 'RescueCase', jobId: { in: rescueIds } },
+        { jobType: 'TransportRequest', jobId: { in: transportIds } },
+      ],
+    },
+    _count: { _all: true },
+  });
+  const followerCountByJob = new Map<string, number>();
+  for (const f of followers) followerCountByJob.set(`${f.jobType}:${f.jobId}`, f._count._all);
+
+  // PR I: last-activity per rescue case via the timeline. Most recent
+  // RescueCaseUpdate per case.
+  const recentRescueUpdates = rescueIds.length === 0 ? [] : await prisma.rescueCaseUpdate.groupBy({
+    by: ['caseId'],
+    where: { caseId: { in: rescueIds } },
+    _max: { createdAt: true },
+  });
+  const lastRescueUpdateBy = new Map<string, Date>();
+  for (const r of recentRescueUpdates) {
+    if (r._max.createdAt) lastRescueUpdateBy.set(r.caseId, r._max.createdAt);
+  }
+
   const rescueById = new Map(rescues.map(r => [r.id, r]));
   const transportById = new Map(transports.map(r => [r.id, r]));
   const RESCUE_RESOLVED = new Set(['rescued', 'escaped_flew_away', 'closed_unable']);
@@ -98,6 +151,18 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
       if (!job) continue;
       const resolved = RESCUE_RESOLVED.has(job.status) || !!job.figuredOutAt;
       if (resolved && a.status !== 'claimed') continue; // hide resolved unclaimed
+      const lastAct = mostRecent([
+        job.pointPersonClaimedAt,
+        job.figuredOutAt,
+        lastRescueUpdateBy.get(job.id) ?? null,
+      ]);
+      const idleMs = lastAct ? Date.now() - lastAct.getTime() : null;
+      const threshold = job.emergencyFlag ? TAKEOVER_THRESHOLD_EMERGENCY_MS : TAKEOVER_THRESHOLD_ROUTINE_MS;
+      const takeoverUnlocked =
+        !!job.pointPersonId &&
+        job.pointPersonId !== profileId &&
+        idleMs !== null &&
+        idleMs >= threshold;
       out.push({
         assignmentId: a.id,
         status: a.status as OpenAssignment['status'],
@@ -113,10 +178,16 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
         pointPersonId: job.pointPersonId,
         pointPersonName: job.pointPerson?.name ?? null,
         pointPersonIsMe: job.pointPersonId === profileId,
+        pointPersonClaimedAt: job.pointPersonClaimedAt,
         figuredOutAt: job.figuredOutAt,
         resolvedStatus: resolved ? job.status : null,
         notifiedAt: a.notifiedAt,
         currentTier: tierByJob.get(`RescueCase:${job.id}`) ?? null,
+        iAmOnStandby: !!a.standbyAt,
+        followerCount: followerCountByJob.get(`RescueCase:${job.id}`) ?? 0,
+        lastActivityAt: lastAct,
+        idleMs,
+        takeoverUnlocked,
       });
     } else {
       const job = transportById.get(a.jobId);
@@ -124,6 +195,14 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
       const resolved = TRANSPORT_RESOLVED.has(job.status) || !!job.figuredOutAt;
       if (resolved && a.status !== 'claimed') continue;
       const deadline = job.deadline ?? job.deliverBy ?? job.pickupBy ?? null;
+      const lastAct = mostRecent([job.pointPersonClaimedAt, job.figuredOutAt]);
+      const idleMs = lastAct ? Date.now() - lastAct.getTime() : null;
+      const threshold = job.emergencyFlag ? TAKEOVER_THRESHOLD_EMERGENCY_MS : TAKEOVER_THRESHOLD_ROUTINE_MS;
+      const takeoverUnlocked =
+        !!job.pointPersonId &&
+        job.pointPersonId !== profileId &&
+        idleMs !== null &&
+        idleMs >= threshold;
       out.push({
         assignmentId: a.id,
         status: a.status as OpenAssignment['status'],
@@ -137,10 +216,16 @@ export async function getOpenAssignmentsFor(profileId: string): Promise<OpenAssi
         pointPersonId: job.pointPersonId,
         pointPersonName: job.pointPerson?.name ?? null,
         pointPersonIsMe: job.pointPersonId === profileId,
+        pointPersonClaimedAt: job.pointPersonClaimedAt,
         figuredOutAt: job.figuredOutAt,
         resolvedStatus: resolved ? job.status : null,
         notifiedAt: a.notifiedAt,
         currentTier: tierByJob.get(`TransportRequest:${job.id}`) ?? null,
+        iAmOnStandby: !!a.standbyAt,
+        followerCount: followerCountByJob.get(`TransportRequest:${job.id}`) ?? 0,
+        lastActivityAt: lastAct,
+        idleMs,
+        takeoverUnlocked,
       });
     }
   }

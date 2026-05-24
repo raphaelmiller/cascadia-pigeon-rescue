@@ -20,9 +20,19 @@ import {
   passUnableAction,
   addRescueNoteAction,
   undoResolutionAction,
+  toggleStandbyAction,
+  takeoverAction,
+  claimPointPersonAction,
 } from '@/app/(volunteer)/v/actions';
-import { canVolunteerUndo, UNDO_WINDOW_HOURS } from '@/lib/volunteer/job-resolution';
-import { Siren, AlertTriangle, FileText, Camera, RotateCcw } from 'lucide-react';
+import {
+  canVolunteerUndo,
+  UNDO_WINDOW_HOURS,
+  getFollowers,
+  getCaseLastActivity,
+  TAKEOVER_THRESHOLD_EMERGENCY_MS,
+  TAKEOVER_THRESHOLD_ROUTINE_MS,
+} from '@/lib/volunteer/job-resolution';
+import { Siren, AlertTriangle, FileText, Camera, RotateCcw, Heart, UserPlus, Users, Clock } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,18 +54,21 @@ export default async function VolunteerRescueCasePage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [c, myAssignment] = await Promise.all([
+  const [c, myAssignment, followers, lastActivityAt] = await Promise.all([
     prisma.rescueCase.findUnique({
       where: { id },
       include: {
         updates: { orderBy: { attemptedAt: 'desc' }, take: 30 },
         photos: { orderBy: { createdAt: 'asc' } },
+        pointPerson: { select: { id: true, name: true } },
       },
     }),
     prisma.assignment.findFirst({
       where: { jobType: 'RescueCase', jobId: id, profileId: v.profileId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, standbyAt: true },
     }),
+    getFollowers('RescueCase', id),
+    getCaseLastActivity(id),
   ]);
   if (!c) notFound();
   if (!myAssignment) {
@@ -78,6 +91,17 @@ export default async function VolunteerRescueCasePage({
   const canUndo = isResolved && c.resolvedByProfileId === v.profileId &&
     canVolunteerUndo(c.resolvedAt, c.resolvedReversedAt);
 
+  // PR I: take-over gating + heartbeat.
+  const claimedByOther = !!c.pointPersonId && !isPointPerson;
+  const iAmOnStandby = !!myAssignment.standbyAt;
+  const idleMs = lastActivityAt ? Date.now() - lastActivityAt.getTime() : null;
+  const threshold = c.emergencyFlag ? TAKEOVER_THRESHOLD_EMERGENCY_MS : TAKEOVER_THRESHOLD_ROUTINE_MS;
+  const thresholdMin = Math.round(threshold / 60000);
+  const idleMin = idleMs != null ? Math.round(idleMs / 60000) : null;
+  const minsTillTakeoverUnlocks = idleMs != null ? Math.max(0, Math.ceil((threshold - idleMs) / 60000)) : null;
+  const takeoverUnlocked = claimedByOther && !isResolved &&
+    (v.isCoordinator || (idleMs != null && idleMs >= threshold));
+
   return (
     <div className="space-y-4">
       <Link href="/rescue" className="text-sm text-teal-700 hover:underline">← Rescue</Link>
@@ -85,7 +109,8 @@ export default async function VolunteerRescueCasePage({
       {/* Status banner */}
       {sp.msg && (
         <div className={`rounded-xl ring-1 px-3 py-2 text-sm ${
-          sp.msg === 'note_added' ? 'bg-emerald-50 ring-emerald-200 text-emerald-900' :
+          sp.msg === 'note_added' || sp.msg === 'standby_on' || sp.msg === 'took_over' ? 'bg-emerald-50 ring-emerald-200 text-emerald-900' :
+          sp.msg.startsWith('takeover_failed') ? 'bg-amber-50 ring-amber-200 text-amber-900' :
           sp.msg === 'unable_needs_reason' ? 'bg-amber-50 ring-amber-200 text-amber-900' :
           sp.msg === 'note_empty' ? 'bg-amber-50 ring-amber-200 text-amber-900' :
           'bg-gray-50 ring-gray-200 text-gray-800'
@@ -93,6 +118,12 @@ export default async function VolunteerRescueCasePage({
           {sp.msg === 'note_added' && '✅ Added — thanks for the detail.'}
           {sp.msg === 'unable_needs_reason' && '⚠️ Add a short reason so the next volunteer has context.'}
           {sp.msg === 'note_empty' && '⚠️ Add text or at least one photo.'}
+          {sp.msg === 'standby_on' && '✅ You’re on standby. We’ll ping you if the lead drops or goes silent.'}
+          {sp.msg === 'standby_off' && 'Standby cleared.'}
+          {sp.msg === 'took_over' && '✅ You’re now Point Person. Old lead has been notified.'}
+          {sp.msg === 'takeover_failed:too_soon' && '⚠️ The lead is still within the activity window. Try again later.'}
+          {sp.msg === 'takeover_failed:race_lost' && '⚠️ Someone beat you to the take-over.'}
+          {sp.msg === 'takeover_failed:already_pp' && '✅ You’re already Point Person.'}
         </div>
       )}
 
@@ -123,6 +154,103 @@ export default async function VolunteerRescueCasePage({
           </p>
         )}
       </div>
+
+      {/* PR I: "Who's on it" / Point Person + followers card */}
+      {!isResolved && (
+        <div className={`rounded-2xl bg-white shadow ring-1 p-4 ${claimedByOther && idleMs != null && idleMs >= threshold ? 'ring-amber-300' : 'ring-gray-200'}`}>
+          <div className="flex items-start gap-3 flex-wrap">
+            <div className="flex-grow min-w-0">
+              {isPointPerson && (
+                <p className="text-sm font-semibold text-emerald-900">You are Point Person.</p>
+              )}
+              {claimedByOther && (
+                <p className="text-sm">
+                  <strong>{c.pointPerson?.name}</strong> is leading this rescue.
+                </p>
+              )}
+              {!c.pointPersonId && (
+                <p className="text-sm font-semibold text-amber-900">No one has claimed Point Person yet.</p>
+              )}
+              {idleMs != null && (
+                <p className="text-[11px] text-gray-600 mt-1 inline-flex items-center gap-1">
+                  <Clock size={11} />
+                  Last activity {idleMin}m ago
+                  {claimedByOther && (
+                    idleMs >= threshold
+                      ? <span className="text-amber-700 font-semibold"> · past the {thresholdMin}m threshold</span>
+                      : <span className="text-gray-500"> · take-over unlocks in {minsTillTakeoverUnlocks}m</span>
+                  )}
+                </p>
+              )}
+              {followers.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <Users size={12} className="text-gray-500" />
+                  <span className="text-[11px] text-gray-600">On standby:</span>
+                  {followers.map(f => (
+                    <span key={f.id} className="inline-flex items-center gap-1 text-[11px] text-emerald-900 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5">
+                      <Heart size={9} className="fill-emerald-700" />
+                      {f.profile.name}
+                      {f.profileId === v.profileId && <span className="text-emerald-600">(you)</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Buttons */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {!c.pointPersonId && (
+              <form action={claimPointPersonAction}>
+                <input type="hidden" name="jobType" value="RescueCase" />
+                <input type="hidden" name="jobId" value={c.id} />
+                <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5">
+                  Claim Point Person
+                </button>
+              </form>
+            )}
+            {claimedByOther && (
+              <form action={toggleStandbyAction}>
+                <input type="hidden" name="jobType" value="RescueCase" />
+                <input type="hidden" name="jobId" value={c.id} />
+                <input type="hidden" name="standby" value={iAmOnStandby ? '0' : '1'} />
+                <button
+                  type="submit"
+                  className={`inline-flex items-center gap-1 rounded-lg text-xs font-semibold px-3 py-1.5 ${
+                    iAmOnStandby
+                      ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 ring-1 ring-emerald-300'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 ring-1 ring-gray-300'
+                  }`}
+                >
+                  <Heart size={12} className={iAmOnStandby ? 'fill-emerald-700' : ''} />
+                  {iAmOnStandby ? 'Standing by ✓' : `Back up ${c.pointPerson?.name?.split(' ')[0] ?? 'lead'}`}
+                </button>
+              </form>
+            )}
+            {takeoverUnlocked && (
+              <form action={takeoverAction}>
+                <input type="hidden" name="jobId" value={c.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+                  title={`${c.pointPerson?.name ?? 'Lead'} has been silent — step in as Point Person`}
+                >
+                  <UserPlus size={12} /> Take over
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Explanatory copy fixing the "Theo's got it, I don't need to show up" trap. */}
+          {claimedByOther && (
+            <p className="text-[11px] text-gray-600 mt-3 italic">
+              {iAmOnStandby
+                ? `You're standing by. If ${c.pointPerson?.name?.split(' ')[0] ?? 'the lead'} drops or goes silent, you'll be the next to step in.`
+                : `${c.pointPerson?.name?.split(' ')[0] ?? 'The lead'} has it for now — but rescues fail when everyone assumes someone else is handling it. Tap “Back up” so we know you're ready if needed.`}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Undo block */}
       {canUndo && (

@@ -52,12 +52,21 @@ export default async function VolunteerHome({
         )}
       </div>
 
-      {/* Active assignments -- the heart of Phase 1 */}
+      {/* Active assignments -- the heart of Phase 1.
+          PR I (2026-05-24): reframed header. "You were paged" beats
+          "Awaiting your action" because half these cards are claimed by
+          someone else — the volunteer's role is to back the lead up,
+          not bail when they see another name. */}
       {assignments.length > 0 && (
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
-            Awaiting your action ({assignments.length})
-          </h2>
+          <div className="flex items-baseline justify-between gap-2 mb-2 px-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              You were paged ({assignments.length})
+            </h2>
+          </div>
+          <p className="text-[11px] text-gray-500 px-1 mb-2 italic">
+            Tap any card to see details. Someone else claiming a case doesn't mean you're off the hook — if they drop, you're next.
+          </p>
           <div className="space-y-3">
             {assignments.map(a => (
               <AssignmentCard key={a.assignmentId} a={a} />

@@ -472,3 +472,235 @@ export function canVolunteerUndo(resolvedAt: Date | null, resolvedReversedAt: Da
 }
 
 export const UNDO_WINDOW_HOURS = UNDO_WINDOW_MS / (60 * 60 * 1000);
+
+// ---------------------------------------------------------------------
+// PR I (2026-05-24) — takeoverPointPerson()
+// ---------------------------------------------------------------------
+// A standby volunteer (or any paged volunteer in a pinch) can take over
+// as Point Person if the current PP has gone dark past the heartbeat
+// threshold. Rules:
+//   • Emergency-flagged rescue: 10 min since last activity
+//   • Non-emergency: 20 min since last activity
+//   • Coordinators can take over anytime (admin override path)
+//
+// "Last activity" = max(pointPersonClaimedAt, most recent
+// RescueCaseUpdate.createdAt, figuredOutAt). If the PP has been silent
+// past the threshold, the takeover unblocks.
+//
+// The takeover is atomic: updateMany guarded on the current PP id so
+// two simultaneous takeovers don't race. Winner becomes the new PP;
+// the loser gets a friendly "already taken over" message.
+// ---------------------------------------------------------------------
+
+export const TAKEOVER_THRESHOLD_EMERGENCY_MS = 10 * 60 * 1000;
+export const TAKEOVER_THRESHOLD_ROUTINE_MS   = 20 * 60 * 1000;
+
+export type TakeoverResult =
+  | { ok: true; previousPointPersonId: string | null; newStatus: 'rescue_active' }
+  | { ok: false; reason: 'not_found' | 'not_paged' | 'too_soon' | 'already_pp' | 'race_lost' | 'resolved' };
+
+/**
+ * Compute the most-recent "signal of life" timestamp for a rescue case.
+ * Used by both the takeover gate AND the UI to render the heartbeat nudge.
+ */
+export async function getCaseLastActivity(jobId: string): Promise<Date | null> {
+  const c = await prisma.rescueCase.findUnique({
+    where: { id: jobId },
+    select: {
+      pointPersonClaimedAt: true,
+      figuredOutAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!c) return null;
+  const latestUpdate = await prisma.rescueCaseUpdate.findFirst({
+    where: { caseId: jobId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  const candidates = [
+    c.pointPersonClaimedAt,
+    c.figuredOutAt,
+    latestUpdate?.createdAt ?? null,
+  ].filter((d): d is Date => !!d);
+  if (candidates.length === 0) return c.updatedAt ?? null;
+  return candidates.sort((a, b) => b.getTime() - a.getTime())[0];
+}
+
+export async function takeoverPointPerson(args: {
+  jobId: string;
+  actorProfileId: string;
+  isCoordinator?: boolean;
+}): Promise<TakeoverResult> {
+  const { jobId, actorProfileId, isCoordinator } = args;
+  const now = new Date();
+
+  const c = await prisma.rescueCase.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      status: true,
+      pointPersonId: true,
+      pointPersonClaimedAt: true,
+      emergencyFlag: true,
+      figuredOutAt: true,
+    },
+  });
+  if (!c) return { ok: false, reason: 'not_found' };
+  if (c.status !== 'needs_rescue') return { ok: false, reason: 'resolved' };
+  if (c.pointPersonId === actorProfileId) return { ok: false, reason: 'already_pp' };
+
+  // Actor must have been paged on this case (or be a coordinator).
+  const assignment = await prisma.assignment.findFirst({
+    where: {
+      jobType: 'RescueCase',
+      jobId,
+      profileId: actorProfileId,
+      status: { in: ['notified', 'claimed'] },
+    },
+    select: { id: true },
+  });
+  if (!assignment && !isCoordinator) return { ok: false, reason: 'not_paged' };
+
+  // Threshold check (skipped for coordinators).
+  if (!isCoordinator) {
+    const last = await getCaseLastActivity(jobId);
+    const threshold = c.emergencyFlag ? TAKEOVER_THRESHOLD_EMERGENCY_MS : TAKEOVER_THRESHOLD_ROUTINE_MS;
+    const idleMs = last ? now.getTime() - last.getTime() : Infinity;
+    if (idleMs < threshold) {
+      return { ok: false, reason: 'too_soon' };
+    }
+  }
+
+  const previousPointPersonId = c.pointPersonId;
+
+  // Atomic swap: only succeed if pointPersonId hasn't changed since we read it.
+  const swap = await prisma.rescueCase.updateMany({
+    where: { id: jobId, pointPersonId: previousPointPersonId },
+    data: {
+      pointPersonId: actorProfileId,
+      pointPersonClaimedAt: now,
+      figuredOutAt: null,
+    },
+  });
+  if (swap.count === 0) return { ok: false, reason: 'race_lost' };
+
+  // Promote the actor's Assignment row to claimed; demote previous PP's
+  // Assignment back to notified (so they still see the case + can stay
+  // in the loop / re-claim if needed).
+  await prisma.$transaction(async (tx) => {
+    if (assignment) {
+      await tx.assignment.update({
+        where: { id: assignment.id },
+        data: {
+          status: 'claimed',
+          claimedAt: now,
+          standbyAt: null,
+          standbyClearedAt: now,
+        },
+      });
+    } else if (isCoordinator) {
+      // Coordinator wasn't paged — create an assignment row so the
+      // case shows up in their feed going forward.
+      await tx.assignment.upsert({
+        where: { jobType_jobId_profileId: { jobType: 'RescueCase', jobId, profileId: actorProfileId } },
+        update: { status: 'claimed', claimedAt: now },
+        create: {
+          jobType: 'RescueCase',
+          jobId,
+          profileId: actorProfileId,
+          status: 'claimed',
+          claimedAt: now,
+          source: 'manual',
+        },
+      });
+    }
+    if (previousPointPersonId) {
+      await tx.assignment.updateMany({
+        where: { jobType: 'RescueCase', jobId, profileId: previousPointPersonId, status: 'claimed' },
+        data: { status: 'notified', claimedAt: null },
+      });
+    }
+
+    // Timeline.
+    await tx.rescueCaseUpdate.create({
+      data: {
+        caseId: jobId,
+        text: isCoordinator
+          ? `Coordinator took over as Point Person.`
+          : `Point Person changed via take-over (idle past threshold).`,
+        category: 'system',
+        authorProfileId: actorProfileId,
+      },
+    });
+  });
+
+  return { ok: true, previousPointPersonId, newStatus: 'rescue_active' };
+}
+
+// ---------------------------------------------------------------------
+// PR I: standby state — "I can back up [PP]"
+// ---------------------------------------------------------------------
+// Toggles the Assignment.standbyAt flag for a paged non-PP volunteer.
+// No points (until Phase 2 rule tuning). Stays status='notified' so
+// the assignment continues to show in the volunteer's feed.
+// ---------------------------------------------------------------------
+export type StandbyResult =
+  | { ok: true; standing_by: boolean }
+  | { ok: false; reason: 'not_paged' | 'is_pp' };
+
+export async function setStandby(args: {
+  jobType: 'RescueCase' | 'TransportRequest';
+  jobId: string;
+  actorProfileId: string;
+  standing_by: boolean;
+}): Promise<StandbyResult> {
+  const { jobType, jobId, actorProfileId, standing_by } = args;
+  const now = new Date();
+
+  // Reject if the actor IS the current PP (use the resolve buttons instead).
+  if (jobType === 'RescueCase') {
+    const c = await prisma.rescueCase.findUnique({ where: { id: jobId }, select: { pointPersonId: true } });
+    if (c?.pointPersonId === actorProfileId) return { ok: false, reason: 'is_pp' };
+  } else {
+    const t = await prisma.transportRequest.findUnique({ where: { id: jobId }, select: { pointPersonId: true } });
+    if (t?.pointPersonId === actorProfileId) return { ok: false, reason: 'is_pp' };
+  }
+
+  const a = await prisma.assignment.findUnique({
+    where: { jobType_jobId_profileId: { jobType, jobId, profileId: actorProfileId } },
+    select: { id: true, status: true, standbyAt: true },
+  });
+  if (!a) return { ok: false, reason: 'not_paged' };
+
+  await prisma.assignment.update({
+    where: { id: a.id },
+    data: standing_by
+      ? { standbyAt: now, standbyClearedAt: null }
+      : { standbyAt: null, standbyClearedAt: now },
+  });
+  return { ok: true, standing_by };
+}
+
+/**
+ * List of follower profiles (paged volunteers in standby) for a job.
+ * Used to render the avatar stack on the case page + AssignmentCard.
+ */
+export async function getFollowers(jobType: 'RescueCase' | 'TransportRequest', jobId: string) {
+  return prisma.assignment.findMany({
+    where: {
+      jobType,
+      jobId,
+      standbyAt: { not: null },
+      status: { in: ['notified', 'claimed'] },
+    },
+    orderBy: { standbyAt: 'asc' },
+    select: {
+      id: true,
+      profileId: true,
+      standbyAt: true,
+      profile: { select: { name: true } },
+    },
+  });
+}
+
