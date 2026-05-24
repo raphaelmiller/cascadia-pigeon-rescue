@@ -47,6 +47,13 @@ export const RULES_CATALOG: RuleSeed[] = [
     suggestedPoints: 3,
   },
   {
+    kind: 'rescue.resolved_deceased',
+    label: 'Bird found deceased',
+    description: 'PR J (2026-05-24). Bird died at the scene or was found already deceased. Volunteer did the work; outcome was outside their control. Creates a memorial Bird record (status=deceased).',
+    category: 'rescue',
+    suggestedPoints: 5,
+  },
+  {
     kind: 'rescue.resolved_unable',
     label: 'Rescue closed unable (admin)',
     description: 'Admin-only terminal close. Volunteer-side "unable" now escalates instead (see rescue.unable_passed).',
@@ -55,10 +62,17 @@ export const RULES_CATALOG: RuleSeed[] = [
   },
   {
     kind: 'rescue.unable_passed',
-    label: 'Rescue passed (couldn\'t finish)',
-    description: 'PR H (2026-05-24). Volunteer Point Person tried, couldn\'t rescue, and honestly passed the case back to the dispatch pool with a reason. Beats sitting on it.',
+    label: 'Rescue passed — honest hand-off',
+    description: 'PR H (2026-05-24). Auto-banked +1 for posting a clear hand-off note when escalating an Unable rescue. Beats sitting on the case in silence.',
     category: 'rescue',
     suggestedPoints: 1,
+  },
+  {
+    kind: 'rescue.unable_high_effort',
+    label: 'Rescue passed — high-effort attempt (review)',
+    description: 'PR J (2026-05-24). Bonus for high-effort Unable attempts. Goes through coordinator review in /dispatch/queue — Christina + coordinators approve / reject / adjust based on context.',
+    category: 'rescue',
+    suggestedPoints: 2,
   },
   {
     kind: 'rescue.field_note',

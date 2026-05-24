@@ -356,24 +356,30 @@ export const SHIFT_TYPE_TONE: Record<string, string> = {
 
 export const SUPPLY_CATEGORIES = ['food', 'medical', 'housing', 'cleaning', 'paperwork', 'other'] as const;
 
-// PR D: Rescue case status workflow
+// PR D: Rescue case status workflow.
+// PR J (2026-05-24): added 'deceased' as a fourth resolution (bird found
+// already deceased, or died at the scene). Creates a Bird record with
+// status='deceased' for memorial / informational tracking.
 export const RESCUE_CASE_STATUSES = [
   'needs_rescue',
   'rescued',
   'escaped_flew_away',
   'closed_unable',
+  'deceased',
 ] as const;
 export const RESCUE_CASE_STATUS_LABEL: Record<string, string> = {
   needs_rescue: '🚨 Needs rescue',
   rescued: '✅ Rescued',
   escaped_flew_away: '💨 Escaped',
   closed_unable: '❌ Closed',
+  deceased: '⚰️ Deceased',
 };
 export const RESCUE_CASE_STATUS_TONE: Record<string, string> = {
   needs_rescue: 'red',
   rescued: 'green',
   escaped_flew_away: 'yellow',
   closed_unable: 'gray',
+  deceased: 'gray',
 };
 
 // PR G (2026-05-19) — Current Whereabouts categories.
