@@ -23,6 +23,7 @@ import {
   toggleStandbyAction,
   takeoverAction,
   claimPointPersonAction,
+  figuredOutAction,
 } from '@/app/(volunteer)/v/actions';
 import {
   canVolunteerUndo,
@@ -283,63 +284,101 @@ export default async function VolunteerRescueCasePage({
         </form>
       )}
 
-      {/* Photos */}
-      {c.photos.length > 0 && (
-        <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Photos ({c.photos.length})</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {c.photos.map(p => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={p.id} src={p.url} alt="" className="w-full h-24 object-cover rounded-lg" />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* PR J (2026-05-24): unified ACTIVITY card.
+          Composer at top + Photos strip + Timeline log inline as one thread.
+          Was three separate stacked cards — noisy and unclear which thing
+          was which. This reads like a chat / project log instead. */}
+      <div
+        id="notes"
+        className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-5 space-y-4 scroll-mt-20"
+      >
+        <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <FileText size={18} className="text-blue-600" /> Activity
+        </h2>
 
-      {/* Notes & photos form (anchor: #notes) */}
-      {!isResolved && (
-        <form
-          id="notes"
-          action={addRescueNoteAction}
-          className="rounded-2xl bg-white shadow ring-1 ring-blue-200 p-5 space-y-3 scroll-mt-20"
-          encType="multipart/form-data"
-        >
-          <input type="hidden" name="jobId" value={c.id} />
-          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <FileText size={18} className="text-blue-600" /> Add field notes & photos
-          </h2>
-          <p className="text-xs text-gray-600">
-            Notes help the next volunteer if you can&apos;t finish, and photos can land on CPR social media.
-            <strong> +1 pt per note, +2 pts per photo</strong> — capped at +5 per case.
-          </p>
-          <label className="block">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1">What did you see?</span>
+        {/* Composer — only when the case is still active. */}
+        {!isResolved && (
+          <form action={addRescueNoteAction} className="space-y-3" encType="multipart/form-data">
+            <input type="hidden" name="jobId" value={c.id} />
             <textarea
               name="text"
               rows={3}
-              placeholder="e.g. 'Bird is in the back parking lot under the dumpster. Hopping not flying — likely wing. Owner of building was helpful.'"
+              placeholder="What's happening? e.g. 'Arrived on scene. Bird is under the dumpster, hopping not flying — likely wing injury. Owner of building was helpful.'"
               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
             />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1 flex items-center gap-1">
-              <Camera size={12} /> Photos (optional)
-            </span>
-            <input
-              type="file"
-              name="photos"
-              multiple
-              accept="image/*"
-              className="block w-full text-sm"
-            />
-          </label>
-          <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
-            Save note
-          </button>
-        </form>
-      )}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1 text-xs text-gray-700 cursor-pointer">
+                <Camera size={14} />
+                <span className="underline">Add photos</span>
+                <input type="file" name="photos" multiple accept="image/*" className="sr-only" />
+              </label>
+              <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
+                Post update
+              </button>
+              <span className="text-[11px] text-gray-500 ml-auto">+1 pt per note · +2 per photo · capped +5/case</span>
+            </div>
+          </form>
+        )}
 
-      {/* Unable form (anchor: #unable) — Point Person only, active cases only. */}
+        {/* Photos strip (if any) */}
+        {c.photos.length > 0 && (
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold mb-2">Photos ({c.photos.length})</p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {c.photos.map(p => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={p.id} src={p.url} alt="" className="w-full h-24 object-cover rounded-lg" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Timeline */}
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold mb-1">
+            Timeline ({c.updates.length})
+          </p>
+          {c.updates.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">No updates yet. Be the first to post.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {c.updates.map(u => (
+                <li key={u.id} className="py-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                    <span>{u.attemptedAt.toLocaleString()}</span>
+                    {u.category === 'volunteer_note' && (
+                      <span className="rounded-full px-1.5 py-0 text-[10px] bg-blue-100 text-blue-800 font-semibold">FIELD NOTE</span>
+                    )}
+                    {u.authorName && <span>· {u.authorName}</span>}
+                  </div>
+                  <p className="mt-1 text-sm whitespace-pre-wrap">{u.text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Figured Out ghost link — small, low-key. Power-user action. */}
+        {isPointPerson && !isResolved && (
+          <form action={figuredOutAction} className="pt-2 border-t border-gray-100">
+            <input type="hidden" name="jobType" value="RescueCase" />
+            <input type="hidden" name="jobId" value={c.id} />
+            <button
+              type="submit"
+              className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
+              title="Close escalations without changing the case status (e.g. you're on your way, stop the fan-out)."
+            >
+              Figured Out (stop the fan-out without resolving)
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* PR J: SOFTENED Unable card.
+          OLD copy was hall-monitor-vibes ("required", "+1 pt promise", scolding bullet list).
+          NEW copy is collaborative: "so we can figure out how to overcome the issues and help
+          the bird." Points go through coordinator review (auto +1 for honest post, +2 pending
+          review for high-effort attempt). */}
       {isPointPerson && c.status === 'needs_rescue' && (
         <form
           id="unable"
@@ -348,12 +387,15 @@ export default async function VolunteerRescueCasePage({
         >
           <input type="hidden" name="jobId" value={c.id} />
           <h2 className="text-base font-semibold text-amber-900 flex items-center gap-2">
-            <AlertTriangle size={18} className="text-amber-600" /> Unable to rescue — pass it on
+            <AlertTriangle size={18} className="text-amber-600" /> Unable to rescue — escalate
           </h2>
-          <p className="text-xs text-gray-700">
-            This does <strong>not</strong> close the case. It releases your claim, sends the
-            case back to the pool, and pings the next-nearest volunteers + a coordinator.
-            The next person needs your context — write 1–2 sentences:
+          <p className="text-sm text-gray-700">
+            Please share what happened so coordinators + the next volunteer can figure out how to
+            overcome the obstacles and still help the bird. This <strong>does not close the case</strong> —
+            it sends it back to the pool with your context.
+          </p>
+          <p className="text-xs text-gray-600">
+            Common situations — mention what applies:
           </p>
           <ul className="text-[11px] text-gray-600 list-disc list-inside space-y-0.5">
             <li>Couldn&apos;t locate the bird</li>
@@ -364,50 +406,26 @@ export default async function VolunteerRescueCasePage({
           </ul>
           <label className="block">
             <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1">
-              Why can&apos;t you rescue? <span className="text-red-600">required</span>
+              What happened?
             </span>
             <textarea
               name="reason"
               required
               minLength={4}
               rows={3}
-              placeholder="e.g. 'Got there but bird had flown to the roof of the auto shop. Last seen heading east.'"
+              placeholder="e.g. 'Got there but bird had flown to the roof of the auto shop. Last seen heading east. Brought a net but couldn't reach.'"
               className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
             />
           </label>
-          <p className="text-[11px] text-gray-600">
-            You&apos;ll get <strong>+1 pt</strong> for showing up and being honest about handing it off.
+          <p className="text-[11px] text-gray-600 italic">
+            Coordinators will review this and may award points for high-effort attempts. You&apos;ll get
+            +1 banked automatically for posting an honest hand-off; a bonus is judged on context.
           </p>
           <button type="submit" className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
-            Pass to next volunteer
+            Send to coordinators + pass to next volunteer
           </button>
         </form>
       )}
-
-      {/* Timeline */}
-      <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-          Timeline ({c.updates.length})
-        </h2>
-        {c.updates.length === 0 ? (
-          <p className="text-sm text-gray-500">No updates yet.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {c.updates.map(u => (
-              <li key={u.id} className="py-3">
-                <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                  <span>{u.attemptedAt.toLocaleString()}</span>
-                  {u.category === 'volunteer_note' && (
-                    <span className="rounded-full px-1.5 py-0 text-[10px] bg-blue-100 text-blue-800 font-semibold">FIELD NOTE</span>
-                  )}
-                  {u.authorName && <span>· {u.authorName}</span>}
-                </div>
-                <p className="mt-1 text-sm whitespace-pre-wrap">{u.text}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   );
 }

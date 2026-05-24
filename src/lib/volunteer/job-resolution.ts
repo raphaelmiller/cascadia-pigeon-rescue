@@ -25,13 +25,16 @@ import { logEvent } from './events';
 import type { JobType } from './dispatch';
 import { dispatchJob } from './dispatch';
 
-export type RescueResolution = 'rescued' | 'escaped_flew_away' | 'closed_unable';
+// PR J (2026-05-24): added 'deceased' — bird found dead or died at the scene.
+// Creates a Bird record marked status='deceased' for memorial + stats.
+export type RescueResolution = 'rescued' | 'escaped_flew_away' | 'closed_unable' | 'deceased';
 export type TransportResolution = 'in_transit' | 'delivered' | 'cancelled';
 
 const POINTS = {
   rescued: 5,
   escaped_flew_away: 2,   // showed up, did the work, bird flew off -- still credit
   closed_unable: 1,       // admin-only terminal close — minimal credit
+  deceased: 5,            // PR J: same effort as a rescue — outcome was outside the volunteer's control
   in_transit: 0,          // just a state change, no points yet
   delivered: 5,
   cancelled: 0,
@@ -41,17 +44,21 @@ const POINT_KIND: Record<string, string> = {
   rescued: 'rescue.resolved_rescued',
   escaped_flew_away: 'rescue.resolved_escaped',
   closed_unable: 'rescue.resolved_unable',
+  deceased: 'rescue.resolved_deceased',
   in_transit: 'transport.in_transit',
   delivered: 'transport.delivered',
   cancelled: 'transport.cancelled',
 };
 
-// Volunteers who PASS a rescue ("unable") get 1 pt for showing up and
-// being honest enough to escalate it back to the pool rather than sit
-// on it. Kind is separate from `closed_unable` so reporting can
-// distinguish "I tried, couldn't, passed it on" from "admin gave up".
-const UNABLE_PASS_POINTS = 1;
-const UNABLE_PASS_KIND = 'rescue.unable_passed';
+// PR J (2026-05-24): two-tier reward for "Unable":
+//   • +1 auto-bank — reward for showing up + posting a note. No review.
+//   • +2 PENDING REVIEW — "high-effort attempt" judgment call. Coordinator
+//     decides in the approval queue. Could be approved as 0 / 2 / adjusted.
+// Tracked as TWO separate VolunteerEvents so the audit reads clean.
+const UNABLE_AUTO_POINTS    = 1;
+const UNABLE_AUTO_KIND      = 'rescue.unable_passed';        // legacy kind, kept for back-compat
+const UNABLE_REVIEW_POINTS  = 2;
+const UNABLE_REVIEW_KIND    = 'rescue.unable_high_effort';   // pending review
 
 // Window in which the original actor (or any admin) can undo a
 // resolution from the volunteer portal. Admins can undo anytime from
@@ -87,7 +94,7 @@ export async function resolveJob(args: {
 
   // Validate resolution matches job type.
   if (jobType === 'RescueCase') {
-    if (!['rescued', 'escaped_flew_away', 'closed_unable'].includes(resolution)) {
+    if (!['rescued', 'escaped_flew_away', 'closed_unable', 'deceased'].includes(resolution)) {
       return { ok: false, reason: 'forbidden' };
     }
     // closed_unable is now admin-only. From the volunteer portal the
@@ -103,10 +110,37 @@ export async function resolveJob(args: {
 
   // Load job to confirm existence + check current state.
   let currentStatus: string;
+  // PR J: for deceased resolutions we need the case context to build a Bird record.
+  type RescueCaseCtx = {
+    status: string;
+    birdDescription: string | null;
+    issue: string | null;
+    location: string | null;
+    address: string | null;
+    reporterName: string | null;
+    reporterPhone: string | null;
+    reporterContact: string | null;
+    rescuedBirdId: string | null;
+  };
+  let rescueCaseCtx: RescueCaseCtx | null = null;
   if (jobType === 'RescueCase') {
-    const job = await prisma.rescueCase.findUnique({ where: { id: jobId }, select: { status: true } });
+    const job = await prisma.rescueCase.findUnique({
+      where: { id: jobId },
+      select: {
+        status: true,
+        birdDescription: true,
+        issue: true,
+        location: true,
+        address: true,
+        reporterName: true,
+        reporterPhone: true,
+        reporterContact: true,
+        rescuedBirdId: true,
+      },
+    });
     if (!job) return { ok: false, reason: 'not_found' };
     currentStatus = job.status;
+    rescueCaseCtx = job;
   } else {
     const job = await prisma.transportRequest.findUnique({ where: { id: jobId }, select: { status: true } });
     if (!job) return { ok: false, reason: 'not_found' };
@@ -119,6 +153,28 @@ export async function resolveJob(args: {
   // Atomic transition + cleanup.
   await prisma.$transaction(async (tx) => {
     if (jobType === 'RescueCase') {
+      // PR J: Deceased → create a Bird record marked status='deceased' for
+      // memorial + informational tracking. Skip if the case already has one.
+      let birdIdToLink: string | null = rescueCaseCtx?.rescuedBirdId ?? null;
+      let createdMemorialBird = false;
+      if (resolution === 'deceased' && !birdIdToLink && rescueCaseCtx) {
+        const birdName = rescueCaseCtx.birdDescription
+          ? rescueCaseCtx.birdDescription.slice(0, 80)
+          : `Memorial — found ${new Date().toLocaleDateString()}`;
+        const memorialBird = await tx.bird.create({
+          data: {
+            name: birdName,
+            foundLocation: rescueCaseCtx.location || rescueCaseCtx.address || null,
+            finderName: rescueCaseCtx.reporterName,
+            finderContact: rescueCaseCtx.reporterPhone || rescueCaseCtx.reporterContact,
+            behaviorNotes: rescueCaseCtx.issue,
+            status: 'deceased',
+          },
+        });
+        birdIdToLink = memorialBird.id;
+        createdMemorialBird = true;
+      }
+
       await tx.rescueCase.update({
         where: { id: jobId },
         data: {
@@ -126,12 +182,15 @@ export async function resolveJob(args: {
           resolvedAt: now,
           resolvedByProfileId: actorProfileId,
           resolvedReversedAt: null,
+          ...(birdIdToLink && !rescueCaseCtx?.rescuedBirdId ? { rescuedBirdId: birdIdToLink } : {}),
         },
       });
       await tx.rescueCaseUpdate.create({
         data: {
           caseId: jobId,
-          text: `Status changed -> ${resolution}`,
+          text: createdMemorialBird
+            ? `Status changed → deceased. Memorial Bird record created.`
+            : `Status changed → ${resolution}`,
           category: 'system',
           authorProfileId: actorProfileId,
         },
@@ -272,15 +331,29 @@ export async function passUnable(args: {
     });
   });
 
-  // 7: award +1 to the actor for honest hand-off.
+  // 7: two-tier point reward.
+  //   (a) +1 AUTO — reward for posting a clear hand-off note. Banked immediately.
+  //   (b) +2 PENDING REVIEW — "high-effort attempt" judgment call, Christina
+  //       + coordinators decide in /dispatch/queue.
   await logEvent({
     profileId: actorProfileId,
     category: 'rescue',
-    kind: UNABLE_PASS_KIND,
-    pointDelta: UNABLE_PASS_POINTS,
+    kind: UNABLE_AUTO_KIND,
+    pointDelta: UNABLE_AUTO_POINTS,
     refType: 'RescueCase',
     refId: jobId,
     notes: trimmed.slice(0, 500),
+    approvalStatus: 'auto',
+  });
+  await logEvent({
+    profileId: actorProfileId,
+    category: 'rescue',
+    kind: UNABLE_REVIEW_KIND,
+    pointDelta: UNABLE_REVIEW_POINTS,
+    refType: 'RescueCase',
+    refId: jobId,
+    notes: trimmed.slice(0, 500),
+    approvalStatus: 'pending',
   });
 
   // 6: re-dispatch. If this case has been passed >=2 times OR is an

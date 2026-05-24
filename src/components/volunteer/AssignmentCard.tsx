@@ -81,26 +81,29 @@ const TONE_BADGE: Record<string, string> = {
 
 const RESOLVE_TONE: Record<string, string> = {
   emerald: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+  red:     'bg-red-600 hover:bg-red-700 text-white',
   yellow:  'bg-yellow-400 hover:bg-yellow-500 text-yellow-900',
+  black:   'bg-gray-900 hover:bg-black text-white',
   blue:    'bg-blue-600 hover:bg-blue-700 text-white',
   gray:    'bg-white hover:bg-gray-50 text-gray-700 ring-1 ring-gray-300',
 };
 
 function ResolveButton({
-  jobType, jobId, resolution, label, tone,
+  jobType, jobId, resolution, label, tone, fullWidth,
 }: {
   jobType: 'RescueCase' | 'TransportRequest';
   jobId: string;
   resolution: string;
   label: string;
-  tone: 'emerald' | 'yellow' | 'blue' | 'gray';
+  tone: 'emerald' | 'red' | 'yellow' | 'black' | 'blue' | 'gray';
+  fullWidth?: boolean;
 }) {
   return (
-    <form action={resolveJobAction}>
+    <form action={resolveJobAction} className={fullWidth ? 'flex-1' : ''}>
       <input type="hidden" name="jobType" value={jobType} />
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="resolution" value={resolution} />
-      <button type="submit" className={`rounded-lg text-xs font-semibold px-3 py-1.5 ${RESOLVE_TONE[tone]}`}>
+      <button type="submit" className={`${fullWidth ? 'w-full' : ''} rounded-lg text-xs font-semibold px-3 py-2 ${RESOLVE_TONE[tone]}`}>
         {label}
       </button>
     </form>
@@ -197,46 +200,56 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
               </form>
             )}
 
-            {/* You ARE the PP → resolution buttons */}
+            {/* You ARE the PP → resolution buttons.
+                PR J (2026-05-24): four-button equal-width resolution row for
+                rescues. "Notes & photos" + "Figured Out" moved into the
+                Activity card on the case detail page to clean up hierarchy. */}
             {a.pointPersonIsMe && (
               <>
                 {a.jobType === 'RescueCase' ? (
-                  <>
-                    <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="rescued" label="Rescued" tone="emerald" />
-                    <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="escaped_flew_away" label="Escaped" tone="yellow" />
+                  <div className="w-full flex gap-2">
+                    <ResolveButton fullWidth jobType={a.jobType} jobId={a.jobId} resolution="rescued" label="Rescued" tone="emerald" />
+                    {/* Unable now POSTs through resolveJobAction — server-side
+                        intercept redirects to the case page #unable anchor so
+                        the reason form is mandatory. */}
                     <Link
                       href={`/rescue/case/${a.jobId}#unable`}
-                      className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3 py-1.5 ring-1 ring-gray-300"
-                      title="Couldn't rescue — pass to next volunteer"
+                      className="flex-1 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2"
+                      title="Couldn't rescue — escalate to next volunteer"
                     >
-                      Unable — pass on
+                      Unable (Escalate)
                     </Link>
-                    <Link
-                      href={`/rescue/case/${a.jobId}#notes`}
-                      className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
-                      title="Add field notes / photos"
-                    >
-                      <FileText size={12} /> Notes & photos
-                    </Link>
-                  </>
+                    <ResolveButton fullWidth jobType={a.jobType} jobId={a.jobId} resolution="escaped_flew_away" label="Escaped" tone="yellow" />
+                    <ResolveButton fullWidth jobType={a.jobType} jobId={a.jobId} resolution="deceased" label="Deceased" tone="black" />
+                  </div>
                 ) : (
                   <>
                     <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="in_transit" label="In Transit" tone="blue" />
                     <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="delivered" label="Delivered" tone="emerald" />
                     <ResolveButton jobType={a.jobType} jobId={a.jobId} resolution="cancelled" label="Cancelled" tone="gray" />
+                    <form action={figuredOutAction}>
+                      <input type="hidden" name="jobType" value={a.jobType} />
+                      <input type="hidden" name="jobId" value={a.jobId} />
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
+                        title="Mark figured out without resolving the case"
+                      >
+                        Figured Out
+                      </button>
+                    </form>
                   </>
                 )}
-                <form action={figuredOutAction}>
-                  <input type="hidden" name="jobType" value={a.jobType} />
-                  <input type="hidden" name="jobId" value={a.jobId} />
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
-                    title="Mark figured out without resolving the case"
+                {/* Secondary actions for rescues live on the case page now (open
+                    case for notes, photos, timeline, figured-out). */}
+                {a.jobType === 'RescueCase' && (
+                  <Link
+                    href={`/rescue/case/${a.jobId}`}
+                    className="text-[11px] text-teal-700 hover:underline mt-1"
                   >
-                    Figured Out
-                  </button>
-                </form>
+                    Add notes / photos / Figured Out →
+                  </Link>
+                )}
               </>
             )}
 
