@@ -7,6 +7,7 @@ import { H1, Card, Btn } from '@/components/ui';
 import { ROLE_TAGS, ROLE_LABELS, parseRoleTags, type RoleTag, serializeRoleTags } from '@/lib/volunteer/roles';
 import { createVolunteerProfile } from './actions';
 import { SystemStatusBanner } from '@/components/volunteer/SystemStatusBanner';
+import { fmtDate } from '@/lib/utils';
 import { UserPlus, Shield } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -133,7 +134,7 @@ export default async function VolunteersPage({
                   )}
                   <p className="text-[11px] text-gray-500 mt-1">
                     {v._count.events} event{v._count.events === 1 ? '' : 's'} ·{' '}
-                    {v.lastLoginAt ? `last login ${new Date(v.lastLoginAt).toLocaleDateString()}` : 'never logged in'}
+                    {v.lastLoginAt ? `last login ${fmtDate(v.lastLoginAt)}` : 'never logged in'}
                   </p>
                 </div>
                 <Link href={`/volunteers/${v.id}`} className="text-xs text-teal-700 hover:underline">

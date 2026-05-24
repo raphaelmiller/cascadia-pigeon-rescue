@@ -106,15 +106,15 @@ export default async function FostersPage({
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-gray-500">Care</span>
                         <span className="tabular-nums font-semibold text-gray-700">
-                          {clinicalScore(f as unknown as Record<string, unknown>)}
-                          <span className="text-gray-400 font-normal ml-1">{clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}</span>
+                          {clinicalScore(f)}
+                          <span className="text-gray-400 font-normal ml-1">{clinicalCategory(clinicalScore(f))}</span>
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-gray-500">Quality</span>
                         <span className="tabular-nums font-semibold text-gray-700">
-                          {qualityScore(f as unknown as Record<string, unknown>)}
-                          <span className="text-gray-400 font-normal ml-1">{qualityCategory(qualityScore(f as unknown as Record<string, unknown>))}</span>
+                          {qualityScore(f)}
+                          <span className="text-gray-400 font-normal ml-1">{qualityCategory(qualityScore(f))}</span>
                         </span>
                       </div>
                       {f.canTransportSelf && (

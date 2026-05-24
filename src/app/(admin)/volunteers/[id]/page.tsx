@@ -7,6 +7,7 @@ import { requireOperator } from '@/lib/auth';
 import { H1, Card, Btn } from '@/components/ui';
 import { ROLE_TAGS, ROLE_LABELS, parseRoleTags } from '@/lib/volunteer/roles';
 import { updateVolunteerProfile, setDisabled, relinkRoleRecord } from '../actions';
+import { fmtDateTime } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +65,7 @@ export default async function VolunteerDetailPage({
 
       {profile.disabledAt && (
         <div className="rounded-xl ring-1 px-3 py-2 text-sm bg-gray-100 ring-gray-300 text-gray-700">
-          🔒 Disabled on {new Date(profile.disabledAt).toLocaleString()}. Magic-link sign-ins are blocked.
+          🔒 Disabled on {fmtDateTime(profile.disabledAt)}. Magic-link sign-ins are blocked.
         </div>
       )}
 
@@ -161,7 +162,7 @@ export default async function VolunteerDetailPage({
           <ul className="divide-y divide-gray-100">
             {recentEvents.map(e => (
               <li key={e.id} className="py-2 text-xs">
-                <span className="font-mono text-gray-500">{new Date(e.createdAt).toLocaleString()}</span>
+                <span className="font-mono text-gray-500">{fmtDateTime(e.createdAt)}</span>
                 {' · '}
                 <span className="font-semibold text-gray-800">{e.kind}</span>
                 {e.pointDelta !== 0 && <span className="ml-1 text-emerald-700">{e.pointDelta > 0 ? '+' : ''}{e.pointDelta}pt</span>}

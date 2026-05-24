@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireVolunteer } from '@/lib/volunteer/auth';
 import { prisma } from '@/lib/prisma';
+import { fmtDateTime } from '@/lib/utils';
 import {
   passUnableAction,
   addRescueNoteAction,
@@ -143,7 +144,7 @@ export default async function VolunteerRescueCasePage({
         {c.address && <p className="text-sm text-gray-600">{c.address}</p>}
         {c.issue && <p className="text-sm text-gray-700 mt-1">⚠️ {c.issue}</p>}
         <p className="text-xs text-gray-500 mt-2">
-          Called in {c.dateCalledIn.toLocaleString()}
+          Called in {fmtDateTime(c.dateCalledIn)}
           {c.unablePassedCount > 0 && (
             <> · <span className="text-amber-700 font-semibold">passed {c.unablePassedCount}×</span></>
           )}
@@ -345,7 +346,7 @@ export default async function VolunteerRescueCasePage({
               {c.updates.map(u => (
                 <li key={u.id} className="py-3">
                   <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                    <span>{u.attemptedAt.toLocaleString()}</span>
+                    <span>{fmtDateTime(u.attemptedAt)}</span>
                     {u.category === 'volunteer_note' && (
                       <span className="rounded-full px-1.5 py-0 text-[10px] bg-blue-100 text-blue-800 font-semibold">FIELD NOTE</span>
                     )}

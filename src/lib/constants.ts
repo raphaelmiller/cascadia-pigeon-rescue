@@ -212,7 +212,13 @@ export const MAX_QUALITY = SKILL_TIERS
   .filter(t => t.scoreCategory === 'quality')
   .reduce((sum, t) => sum + t.items.length * t.pointsPer, 0); // 8
 
-export function clinicalScore(foster: Record<string, unknown>): number {
+// Skill scoring accepts any object that has the boolean skill keys.
+// Prisma's Foster row is the production caller; tests may pass a partial
+// stub. Using a generic preserves type safety at the call site without
+// forcing every caller to do an `as unknown as` double-cast.
+type FosterLike = Record<string, unknown>;
+
+export function clinicalScore(foster: FosterLike): number {
   let total = 0;
   for (const tier of SKILL_TIERS) {
     if (tier.scoreCategory !== 'clinical') continue;
@@ -223,7 +229,7 @@ export function clinicalScore(foster: Record<string, unknown>): number {
   return total;
 }
 
-export function qualityScore(foster: Record<string, unknown>): number {
+export function qualityScore(foster: FosterLike): number {
   let total = 0;
   for (const tier of SKILL_TIERS) {
     if (tier.scoreCategory !== 'quality') continue;

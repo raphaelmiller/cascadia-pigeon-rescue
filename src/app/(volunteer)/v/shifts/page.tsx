@@ -21,6 +21,7 @@
 import { requireVolunteer } from '@/lib/volunteer/auth';
 import { prisma } from '@/lib/prisma';
 import { saveAvailability, deleteAvailability } from './actions';
+import { fmtDate } from '@/lib/utils';
 import { Trash2, Edit3, Plus, Siren, Truck, Calendar } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +47,7 @@ function fmtBlock(s: Date, e: Date, kind: string, rrule: string | null): string 
   if (sameDay) {
     when = `${s.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} ${t(s)}–${t(e)}`;
   } else {
-    when = `${s.toLocaleDateString()} ${t(s)} → ${e.toLocaleDateString()} ${t(e)}`;
+    when = `${fmtDate(s)} ${t(s)} → ${fmtDate(e)} ${t(e)}`;
   }
   if (rrule) {
     const dayMatch = rrule.match(/BYDAY=([A-Z,]+)/);

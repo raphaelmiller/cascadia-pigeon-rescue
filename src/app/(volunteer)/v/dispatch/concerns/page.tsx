@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireVolunteer } from '@/lib/volunteer/auth';
 import { getRecentConcerns } from '@/lib/volunteer/concerns';
+import { fmtDateTime } from '@/lib/utils';
 import { AlertTriangle, Eye, Flame } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +74,7 @@ export default async function VolunteerConcernsFeedPage() {
                     <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap">{c.note}</p>
                   )}
                   <p className="text-[11px] text-gray-500 mt-1">
-                    {c.kind === 'checkin' ? 'Foster check-in' : 'Daily update'} · {c.createdAt.toLocaleString()}
+                    {c.kind === 'checkin' ? 'Foster check-in' : 'Daily update'} · {fmtDateTime(c.createdAt)}
                     {c.birdId && <> · <Link href={`/birds/${c.birdId}`} className="text-teal-700 hover:underline">view bird</Link></>}
                     {c.fosterId && <> · <Link href={`/fosters/${c.fosterId}`} className="text-teal-700 hover:underline">view foster</Link></>}
                   </p>

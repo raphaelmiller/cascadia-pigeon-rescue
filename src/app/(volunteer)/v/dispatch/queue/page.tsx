@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireVolunteer } from '@/lib/volunteer/auth';
 import { prisma } from '@/lib/prisma';
+import { fmtDateTime } from '@/lib/utils';
 import { approvePendingAction, rejectPendingAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export default async function ApprovalQueuePage({
                     Ref: {e.refType} / {e.refId}
                   </p>
                 )}
-                <p className="text-[11px] text-gray-500 mt-0.5">{e.createdAt.toLocaleString()}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{fmtDateTime(e.createdAt)}</p>
               </div>
               <div className="flex-shrink-0 flex flex-col gap-1">
                 <form action={approvePendingAction}>

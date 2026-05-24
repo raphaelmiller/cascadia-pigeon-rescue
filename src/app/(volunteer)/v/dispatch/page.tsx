@@ -8,6 +8,7 @@ import { getPendingReviews, type PendingReview } from '@/lib/volunteer/pending-r
 import { countOpenConcerns } from '@/lib/volunteer/concerns';
 import { redispatchAction, manualClaimAction, forceEscalateAction, approvePendingAction, rejectPendingAction } from './actions';
 import { SystemStatusBanner } from '@/components/volunteer/SystemStatusBanner';
+import { fmtDate, fmtDateTime } from '@/lib/utils';
 import { Siren, Truck, AlertTriangle, Clock, RefreshCw, FastForward, Inbox, Eye } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ function fmtRel(d: Date | null): string {
   if (min < 60) return `in ${min}m`;
   const hr = Math.round(min / 60);
   if (hr < 24) return `in ${hr}h`;
-  return d.toLocaleDateString();
+  return fmtDate(d);
 }
 
 function tierTone(j: BoardJob): string {
@@ -174,7 +175,7 @@ function PendingRow({ r }: { r: PendingReview }) {
         <p className="text-xs text-gray-700 truncate">
           {r.actionLabel}{r.notes ? `: ${r.notes}` : ''}
         </p>
-        <p className="text-[11px] text-gray-500">{r.createdAt.toLocaleString()}</p>
+        <p className="text-[11px] text-gray-500">{fmtDateTime(r.createdAt)}</p>
       </div>
       <div className="flex-shrink-0 flex gap-1">
         <form action={approvePendingAction}>

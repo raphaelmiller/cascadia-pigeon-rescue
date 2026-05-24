@@ -287,22 +287,22 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
         <div className="grid gap-3 sm:grid-cols-2 mt-3">
           <ScoreReadout
             title="Care Proficiency"
-            score={clinicalScore(f as unknown as Record<string, unknown>)}
+            score={clinicalScore(f)}
             max={MAX_CLINICAL}
-            category={clinicalCategory(clinicalScore(f as unknown as Record<string, unknown>))}
-            tone={clinicalCategoryTone(clinicalScore(f as unknown as Record<string, unknown>))}
+            category={clinicalCategory(clinicalScore(f))}
+            tone={clinicalCategoryTone(clinicalScore(f))}
           />
           <ScoreReadout
             title="Quality of Care"
-            score={qualityScore(f as unknown as Record<string, unknown>)}
+            score={qualityScore(f)}
             max={MAX_QUALITY}
-            category={qualityCategory(qualityScore(f as unknown as Record<string, unknown>))}
-            tone={qualityCategoryTone(qualityScore(f as unknown as Record<string, unknown>))}
+            category={qualityCategory(qualityScore(f))}
+            tone={qualityCategoryTone(qualityScore(f))}
           />
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {SKILL_TIERS.map(tier => {
-            const earned = tier.items.reduce((acc, it) => acc + ((f as unknown as Record<string, unknown>)[it.key] ? tier.pointsPer : 0), 0);
+            const earned = tier.items.reduce((acc, it) => acc + ((f as Record<string, unknown>)[it.key] ? tier.pointsPer : 0), 0);
             const max = tier.items.length * tier.pointsPer;
             return (
               <div key={tier.id} className="rounded-lg border border-gray-200 p-3">
@@ -312,7 +312,7 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
                 </div>
                 <ul className="mt-2 text-xs space-y-0.5">
                   {tier.items.map(it => {
-                    const checked = (f as unknown as Record<string, unknown>)[it.key];
+                    const checked = (f as Record<string, unknown>)[it.key];
                     return (
                       <li key={it.key} className={checked ? 'text-emerald-700' : 'text-gray-400'}>
                         {checked ? '✓' : '·'} {it.label}
@@ -396,7 +396,7 @@ export default async function FosterDetail({ params }: { params: Promise<{ id: s
             <h4 className="text-sm font-semibold mb-2">Foster Skill & Care Assessment</h4>
             <p className="text-xs text-gray-500 mb-3">Toggle skills below — scores update live. Save to persist.</p>
             <SkillAssessment
-              initial={Object.fromEntries(ALL_SKILL_KEYS.map(k => [k, !!(f as unknown as Record<string, unknown>)[k]]))}
+              initial={Object.fromEntries(ALL_SKILL_KEYS.map(k => [k, !!(f as Record<string, unknown>)[k]]))}
             />
           </div>
 

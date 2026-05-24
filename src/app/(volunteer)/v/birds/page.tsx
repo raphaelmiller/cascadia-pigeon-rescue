@@ -4,6 +4,7 @@
 import { requireAnyRole } from '@/lib/volunteer/auth';
 import { prisma } from '@/lib/prisma';
 import { submitCheckIn } from './actions';
+import { fmtDateTime } from '@/lib/utils';
 import { Bird, CheckCircle2, Eye, AlertCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -174,7 +175,7 @@ export default async function VolunteerBirdsPage({
                   <p className="text-xs text-gray-700">
                     <span className="font-semibold">{PULSE_LABEL[c.pulse]}</span>
                     {c.bird?.name && <> · {c.bird.name}</>}
-                    <span className="text-gray-400"> · {c.createdAt.toLocaleString()}</span>
+                    <span className="text-gray-400"> · {fmtDateTime(c.createdAt)}</span>
                   </p>
                   {c.note && <p className="text-xs text-gray-600 mt-0.5">{c.note}</p>}
                 </div>

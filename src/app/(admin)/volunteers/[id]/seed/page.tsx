@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireOperator } from '@/lib/auth';
 import { H1, Card, Btn } from '@/components/ui';
 import { seedHistoricalPoints } from './actions';
+import { fmtDateTime } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +139,7 @@ export default async function SeedHistoricalPage({
                 <div className="flex-grow min-w-0">
                   <span className="font-mono text-gray-700">{e.kind}</span>
                   {e.notes && <p className="text-gray-600 mt-0.5">{e.notes}</p>}
-                  <p className="text-[10px] text-gray-400">{e.createdAt.toLocaleString()}</p>
+                  <p className="text-[10px] text-gray-400">{fmtDateTime(e.createdAt)}</p>
                 </div>
                 <span className="font-semibold text-emerald-700">+{e.pointDelta}</span>
               </li>

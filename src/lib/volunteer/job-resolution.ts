@@ -24,6 +24,7 @@ import { prisma } from '@/lib/prisma';
 import { logEvent } from './events';
 import type { JobType } from './dispatch';
 import { dispatchJob } from './dispatch';
+import { fmtDate } from '@/lib/utils';
 
 // PR J (2026-05-24): added 'deceased' — bird found dead or died at the scene.
 // Creates a Bird record marked status='deceased' for memorial + stats.
@@ -160,7 +161,7 @@ export async function resolveJob(args: {
       if (resolution === 'deceased' && !birdIdToLink && rescueCaseCtx) {
         const birdName = rescueCaseCtx.birdDescription
           ? rescueCaseCtx.birdDescription.slice(0, 80)
-          : `Memorial — found ${new Date().toLocaleDateString()}`;
+          : `Memorial — found ${fmtDate(new Date())}`;
         const memorialBird = await tx.bird.create({
           data: {
             name: birdName,

@@ -10,7 +10,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { H1, H2, Card, Pill, Btn, Field, inputClass, Empty } from '@/components/ui';
-import { fmtDateTime, fmtRelative } from '@/lib/utils';
+import { fmtDate, fmtDateTime, fmtRelative } from '@/lib/utils';
 import { requireOperator } from '@/lib/auth';
 import { saveUploads } from '@/lib/uploads';
 import { reverseResolution } from '@/lib/volunteer/job-resolution';
@@ -137,7 +137,7 @@ async function markRescuedAndCreateBird(caseId: string) {
   // Pre-populate Bird from case context.
   const birdName = c.birdDescription
     ? c.birdDescription.slice(0, 80)
-    : `Rescued bird ${new Date().toLocaleDateString()}`;
+    : `Rescued bird ${fmtDate(new Date())}`;
 
   const bird = await prisma.bird.create({
     data: {
