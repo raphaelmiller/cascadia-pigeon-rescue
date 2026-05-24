@@ -95,6 +95,7 @@ model Bird {
   rescuedFromCases      RescueCase[] // PR D: cases where this bird was the rescue subject
   weightLog             WeightEntry[]
   whereaboutsLog        WhereaboutsLogEntry[] // PR G: append-only log of placements/moves
+  fosterCheckIns        FosterCheckIn[]       // Phase 1: volunteer portal check-ins
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -198,6 +199,9 @@ model Foster {
   // Reverse cross-links — a foster can also drive and/or rescue.
   driverProfile  TransportVolunteer? @relation("FosterAsDriver")
   rescuerProfile RescueVolunteer?    @relation("FosterAsRescuer")
+
+  // Phase 0 (volunteer portal) — reverse link from VolunteerProfile.
+  volunteerProfile VolunteerProfile?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -445,6 +449,9 @@ model TransportVolunteer {
   availabilities TransportAvailability[]
   shifts         TransportShift[]
 
+  // Phase 0 (volunteer portal) — reverse link.
+  volunteerProfile VolunteerProfile?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -520,6 +527,15 @@ model TransportRequest {
   // PR C: multi-stop + multi-bird (back-compat: legacy rows have neither).
   stops TransportStop[]
   birds TransportRequestBird[]
+
+  // Phase 1 (dispatch core). See RescueCase for field semantics; same
+  // shape, polymorphic dispatch engine treats both uniformly.
+  emergencyFlag        Boolean @default(false)
+  deadline             DateTime?
+  figuredOutAt         DateTime?
+  pointPersonId        String?
+  pointPerson          VolunteerProfile? @relation("TransportRequestPointPerson", fields: [pointPersonId], references: [id], onDelete: SetNull)
+  pointPersonClaimedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -602,6 +618,9 @@ model RescueVolunteer {
   availabilities RescueAvailability[]
   assignedCases  RescueCase[] // PR D: rescue cases assigned to this volunteer
 
+  // Phase 0 (volunteer portal) — reverse link.
+  volunteerProfile VolunteerProfile?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -658,6 +677,24 @@ model RescueCase {
   // could come in a later PR.
   assignedVolunteerId String?
   assignedVolunteer   RescueVolunteer? @relation(fields: [assignedVolunteerId], references: [id], onDelete: SetNull)
+
+  // Phase 1 (dispatch core).
+  //
+  // emergencyFlag: explicit emergency flag. True = always emergency,
+  //   regardless of deadline.
+  // deadline: when the case has to be acted on by. Implicit emergency
+  //   fires when (deadline - now) < 30 min.
+  // figuredOutAt: a coordinator or Point Person tapped "figured out"
+  //   to close escalations without changing status (e.g. "on my way,
+  //   don't fan-out further").
+  // pointPersonId: claimed Point Person (VolunteerProfile), not
+  //   auto-set. Null until someone taps Claim Point Person.
+  emergencyFlag        Boolean @default(false)
+  deadline             DateTime?
+  figuredOutAt         DateTime?
+  pointPersonId        String?
+  pointPerson          VolunteerProfile? @relation("RescueCasePointPerson", fields: [pointPersonId], references: [id], onDelete: SetNull)
+  pointPersonClaimedAt DateTime?
 
   updates RescueCaseUpdate[]
   photos  RescueCasePhoto[]
@@ -789,4 +826,403 @@ model BandageTask {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 0 (Volunteer Portal) — IDENTITY & EVENT MODELS
+// ========================================================================
+//
+// VolunteerProfile is the identity anchor for the volunteer portal. One
+// row per human. Role tags are stored as a JSON-ish string column (
+// comma-separated keys) so we don't need a separate join table for the
+// 13 role types in the spec. We pick a denormalised column over a join
+// because:
+//   • SQLite doesn't enforce check constraints on enum-likes anyway
+//   • the role list is small and read on every page load
+//   • adding/removing a role is a single UPDATE
+//
+// The existing Foster / TransportVolunteer / RescueVolunteer tables
+// stay where they are. A VolunteerProfile can reference each of the
+// three role tables via nullable FK, so the per-role data (skills,
+// vehicle, etc.) keeps living in its original home and we don't have
+// to migrate any of the existing UI off those tables.
+//
+// Foster / TransportVolunteer / RescueVolunteer all already have an
+// `email` column. For Phase 0 the email column on VolunteerProfile is
+// the source of truth for sign-in; the role-table email columns become
+// denormalised copies (kept in sync when the profile is created from
+// an existing role row).
+// ========================================================================
+model VolunteerProfile {
+  id    String @id @default(cuid())
+  email String @unique
+  phone String?
+  name  String
+
+  // Role tags. Comma-separated keys from a fixed vocabulary in
+  // src/lib/volunteer/roles.ts. Examples: "foster", "transport",
+  // "rescue", "coordinator", "lead_foster", etc. The first 13 from
+  // the spec are the initial set.
+  roleTags String @default("")
+
+  // Coordinator flag — only real permission split per the spec. A
+  // coordinator sees the dispatch board for everyone in the roles
+  // they coordinate; a non-coordinator sees only their own.
+  isCoordinator Boolean @default(false)
+
+  // Optional links to legacy role records so we keep showing the
+  // per-role data (skills, vehicle, etc.) on the right pages. All
+  // three are unique → at most one of each per profile.
+  fosterId    String? @unique
+  foster      Foster? @relation(fields: [fosterId], references: [id])
+  transportId String? @unique
+  transport   TransportVolunteer? @relation(fields: [transportId], references: [id])
+  rescueId    String? @unique
+  rescue      RescueVolunteer? @relation(fields: [rescueId], references: [id])
+
+  // Onboarding state — set when the admin creates the profile but
+  // before the volunteer has clicked their first magic link.
+  invitedAt    DateTime?
+  lastLoginAt  DateTime?
+  disabledAt   DateTime? // soft-disable (preserves history)
+
+  // Phase 1.5: opt-in daily digest SMS. Default off. Volunteer toggles
+  // on /v/profile.
+  digestEnabled Boolean @default(false)
+
+  magicLinks VolunteerMagicLink[]
+  events     VolunteerEvent[]
+
+  // Phase 1 (dispatch core).
+  availability   VolunteerAvailability[]
+  assignments    Assignment[]
+  pointPersonOnRescue   RescueCase[]      @relation("RescueCasePointPerson")
+  pointPersonOnTransport TransportRequest[] @relation("TransportRequestPointPerson")
+  fosterCheckIns FosterCheckIn[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// Magic-link tokens for passwordless sign-in. One row per issued link.
+//
+// Token is a 32-byte URL-safe random string (generated in
+// src/lib/volunteer/magic-link.ts). We store the SHA-256 hash, not the
+// raw token, so a DB leak doesn't grant sign-in. Tokens are single-use
+// (consumedAt) and expire 30 minutes after issue.
+// ------------------------------------------------------------------
+model VolunteerMagicLink {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     VolunteerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  // What the link should land on after sign-in. Validated to be a
+  // same-origin path before redirect.
+  redirectTo  String   @default("/")
+  // Audit: IP + user-agent at issue time. Lightweight forensics if a
+  // link is misused.
+  issuedIp    String?
+  issuedUa    String?
+  expiresAt   DateTime
+  consumedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([profileId, createdAt])
+}
+
+// ------------------------------------------------------------------
+// SMS ledger — every send, real or stubbed, gets a row. Powers the
+// monthly $-ceiling guard in lib/notify/sms.ts and gives us an audit
+// trail ("did Christina actually get the rescue alert?").
+// ------------------------------------------------------------------
+model SmsLedger {
+  id               String   @id @default(cuid())
+  to               String
+  body             String
+  tag              String?
+  dedupeKey        String?
+  provider         String   // "stub" | "twilio"
+  providerSid      String?
+  estimatedCostUsd Float    @default(0)
+  status           String   // "sent_stub" | "queued" | "sent" | "delivered" | "failed" | "error:<code>"
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([dedupeKey, createdAt])
+}
+
+// ------------------------------------------------------------------
+// VolunteerEvent — append-only log of point-earning + audit events.
+//
+// We log from day 1 even though the scoring UI is Phase 2, so no data
+// is lost. `category` is broad (rescue / transport / foster / check_in
+// / admin), `kind` is the specific event key, `pointDelta` is what the
+// rules engine assigned at time of logging (may be 0 for audit-only).
+// `approvalStatus` is "auto" (under threshold, banked immediately),
+// "pending" (above threshold, in Christina's queue), or "approved" /
+// "rejected" / "adjusted".
+//
+// `refType` + `refId` are a soft foreign key — e.g. ("RescueCase",
+// case.id) — used to render "this came from rescue case X" without a
+// hard FK to every model.
+// ------------------------------------------------------------------
+model VolunteerEvent {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      VolunteerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  category     String   // "rescue" | "transport" | "foster" | "check_in" | "admin" | "system"
+  kind         String   // free-text key, e.g. "rescue.claim" / "foster.daily_update"
+  pointDelta   Int      @default(0)
+  approvalStatus String @default("auto") // auto | pending | approved | rejected | adjusted
+  approvedById String?
+  approvedAt   DateTime?
+
+  refType String?
+  refId   String?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  @@index([profileId, createdAt])
+  @@index([approvalStatus, createdAt])
+}
+
+// ========================================================================
+// PHASE 2 — POINT-RULES ENGINE
+// ========================================================================
+//
+// One row per recognized event kind. Christina enables/disables each
+// rule and tunes its point value from the admin /volunteers/rules page.
+// Disabled rules log the event with pointDelta=0 (preserved for audit
+// + future re-enablement).
+//
+// Phase 2 ships with 40+ rule rows seeded (disabled-by-default), per
+// Christina's note: "I'm gonna ask all the volunteers for summaries of
+// their contributions so far, have AI approximate points based on that,
+// and we will have to just start there." The seeded defaults are
+// suggestions only; Christina tunes them before turning them on.
+//
+// The auto-approve threshold lives in env (POINT_AUTO_APPROVE_MAX) and
+// continues to apply per-event: any event with |pointDelta| > threshold
+// lands as approvalStatus='pending' regardless of which rule fired it.
+// ========================================================================
+model PointRule {
+  // Same as VolunteerEvent.kind. The dispatch / check-in / resolution
+  // flows call evaluateRule(kind) to look this up; rule disabled or
+  // missing -> pointDelta=0.
+  kind        String @id
+
+  // Human-readable label for the admin UI.
+  label       String
+  // Free-form text shown beneath the rule in the admin UI.
+  description String?
+  // Group key for the admin UI ("rescue", "transport", "foster",
+  // "check_in", "coordination", "historical").
+  category    String
+
+  // Suggested point value (set by code, never overwritten on seed re-run).
+  suggestedPoints Int @default(0)
+  // Actual point value used when the rule fires. Defaults to suggested
+  // on initial seed; admin edits this.
+  points          Int @default(0)
+
+  // Per-rule enable flag. When false, evaluateRule returns 0 and the
+  // event still logs (audit-only).
+  enabled         Boolean @default(false)
+
+  // Per-rule auto-approve override. When set, a |pointDelta| <= this
+  // value bypasses the global POINT_AUTO_APPROVE_MAX threshold. Use
+  // case: "foster check-ins are never reviewed" => set this to 1.
+  autoApproveMax  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================================================
+// PHASE 1 (Volunteer portal dispatch core) — AVAILABILITY v2
+// ========================================================================
+//
+// One unified availability table tied to VolunteerProfile (not per-role).
+// A volunteer can have any number of availability rows; the dispatch
+// engine asks "is this volunteer available at time T?" by checking ALL
+// of their rows for an overlap.
+//
+// Five availability kinds (per Christina's spec):
+//
+//   - one_time   — single [startsAt, endsAt] window. rrule = null.
+//   - weekly     — recurring weekly. rrule = "FREQ=WEEKLY;BYDAY=...".
+//                  endsAt - startsAt defines the duration; rrule controls
+//                  which days/times.
+//   - indefinite — same shape as weekly, but the volunteer has explicitly
+//                  said "this is my default schedule until further notice"
+//                  vs. "this is only for the next 4 weeks". Lifecycle hint;
+//                  the engine treats it identically to weekly.
+//   - always     — 24/7 availability. startsAt is irrelevant; engine
+//                  treats this volunteer as always-on.
+//   - custom     — escape hatch: a custom RRULE string.
+//
+// `availabilityScope` lets a volunteer say "this block is for rescue
+// only" or "transport only" or "any" — useful for the volunteer who's
+// happy to drive transport on weeknights but only wants rescue alerts on
+// weekends.
+// ========================================================================
+model VolunteerAvailability {
+  id        String @id @default(cuid())
+  profileId String
+  profile   VolunteerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  kind      String  // "one_time" | "weekly" | "indefinite" | "always" | "custom"
+  scope     String  @default("any") // "any" | "rescue" | "transport" | "foster_oncall"
+
+  startsAt  DateTime
+  endsAt    DateTime
+  rrule     String?
+
+  // Optional horizon for "weekly" blocks the volunteer said only runs
+  // for a few weeks. Null = no horizon (which for kind="indefinite" or
+  // "always" is the whole point).
+  effectiveUntil DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId, startsAt])
+  @@index([profileId, kind])
+}
+
+// ========================================================================
+// PHASE 1 — ASSIGNMENT (polymorphic)
+// ========================================================================
+//
+// One row per (Job, VolunteerProfile). When a rescue case or transport
+// request is created, the dispatch engine writes one Assignment row for
+// every volunteer whose shift overlaps. Point Person is NOT auto-set;
+// it's claimed by the first volunteer to tap "Claim Point Person".
+//
+// Polymorphic via jobType + jobId (matches VolunteerEvent.refType /
+// refId pattern). We accept the soft-FK tradeoff so we can extend to
+// new job types (e.g. "foster_handoff") without another migration.
+//
+// Status workflow:
+//   notified  — assignment created; volunteer notified (SMS sent).
+//   declined  — volunteer tapped Unavailable.
+//   claimed   — volunteer tapped Claim Point Person (becomes PP).
+//   resolved  — the underlying job reached a terminal status.
+// ========================================================================
+model Assignment {
+  id        String @id @default(cuid())
+  jobType   String // "RescueCase" | "TransportRequest"
+  jobId     String
+  profileId String
+  profile   VolunteerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  status     String   @default("notified")
+  notifiedAt DateTime @default(now())
+  declinedAt DateTime?
+  claimedAt  DateTime?
+  resolvedAt DateTime?
+
+  // Which dispatch reason produced this assignment. Audit-only; not
+  // queried in the hot path.
+  source String   @default("shift_overlap") // "shift_overlap" | "emergency_broadcast" | "escalation" | "manual"
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobType, jobId])
+  @@index([profileId, status])
+  @@unique([jobType, jobId, profileId])
+}
+
+// ========================================================================
+// PHASE 1 — ESCALATION
+// ========================================================================
+//
+// Each escalation "tier" gets its own row. Lifecycle:
+//
+//   tier 1 (volunteers)  — created when the job is created. tierExpiresAt
+//                          set 15 min out (or 2 min for Point Person claim
+//                          deadline once shift starts). If a claim happens
+//                          before tierExpiresAt, this row is closedAt =
+//                          now() with outcome = "claimed".
+//   tier 2 (coordinator) — created when tier 1 expires unclaimed. SMS
+//                          fired to all coordinators. 15-min window.
+//   tier 3 (christina)   — created when tier 2 expires unhandled. SMS
+//                          fired to christina@cascadiapigeonrescue.org
+//                          (env CHRISTINA_PHONE).
+//
+// Emergency fast-path bypasses tier 1 entirely: when emergencyFlag is
+// true OR deadline-now < 30 min, the job creator emits THREE simultaneous
+// tier rows (volunteers + coordinators + christina) all open at once.
+// First claim closes all three. This matches Christina's note: "deadline
+// less than 30 min away → sent directly to me + coordinators + transport."
+// ========================================================================
+model Escalation {
+  id      String @id @default(cuid())
+  jobType String // "RescueCase" | "TransportRequest"
+  jobId   String
+
+  tier    Int    // 1 (volunteers) | 2 (coordinator) | 3 (christina)
+  reason  String @default("timer") // "timer" | "emergency" | "manual" | "no_claim"
+
+  openedAt    DateTime @default(now())
+  expiresAt   DateTime
+  closedAt    DateTime?
+  // Closed because: "claimed" | "timed_out" | "job_resolved" | "superseded"
+  outcome     String?
+
+  // How many SMS fired for this tier (for ledger debugging).
+  smsFanout   Int      @default(0)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobType, jobId, tier])
+  @@index([closedAt, expiresAt]) // dispatch sweeper uses this
+}
+
+// ========================================================================
+// PHASE 1 — FOSTER CHECK-IN
+// ========================================================================
+//
+// Lightweight daily check-in from the volunteer portal. Optional:
+// per Christina, "don't punish them for skipping when nothing's wrong,
+// but reward them with a point every time they do." The existing
+// DailyUpdate model (in admin land) is the heavyweight clinical record;
+// FosterCheckIn is the volunteer-side gamified ping.
+//
+// A check-in references either a bird (if the volunteer is checking on
+// a specific bird in their care) or a foster session generally. Logs
+// to VolunteerEvent with category="check_in", kind="foster.check_in",
+// pointDelta=1.
+// ========================================================================
+model FosterCheckIn {
+  id        String @id @default(cuid())
+  profileId String
+  profile   VolunteerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  birdId String? // optional; check-in can be generic
+  bird   Bird?   @relation(fields: [birdId], references: [id], onDelete: SetNull)
+
+  // Three-tier health pulse + optional note. Matches the existing
+  // DailyUpdate.stressLevel / healthStatus / concerns triad but lighter.
+  pulse  String  @default("all_good") // "all_good" | "watching" | "concern"
+  note   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([profileId, createdAt])
+  @@index([birdId, createdAt])
 }

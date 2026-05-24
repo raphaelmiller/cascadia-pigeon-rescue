@@ -7,7 +7,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
   : undefined;
 
+// Cross-origin DEV access (Turbopack/HMR). Required when dev server is
+// fronted by a public hostname (e.g. cloudflared tunnels) different from
+// localhost. Same list as ALLOWED_ORIGINS for symmetry.
+const allowedDevOrigins = allowedOrigins;
+
 const nextConfig: NextConfig = {
+  ...(allowedDevOrigins ? { allowedDevOrigins } : {}),
   // Allow larger uploads via server actions (photos, vet PDFs, etc.)
   experimental: {
     serverActions: {

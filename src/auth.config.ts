@@ -1,14 +1,17 @@
 import type { NextAuthConfig } from 'next-auth';
 
 /**
- * Edge-safe slice of the auth config — imported by middleware.ts which runs
- * in Next.js's Edge runtime where `node:crypto` and other Node-only modules
- * are unavailable.
+ * Edge-safe slice of the auth config -- imported by middleware.ts which
+ * runs in Next.js's Edge runtime where `node:crypto` and other Node-only
+ * modules are unavailable.
  *
- * The Credentials provider (which uses `node:crypto` for timing-safe compare)
- * lives in `src/auth.ts` and is the source of truth for actual sign-in.
- * Middleware just needs to know whether a session exists, which works fine
- * with the JWT strategy + an empty providers list here.
+ * Two providers live in src/auth.ts:
+ *   - 'credentials'      -- admin password (existing)
+ *   - 'volunteer-token'  -- magic-link token (NEW, Phase 0)
+ *
+ * Both produce JWTs with a `role` claim. Middleware uses the role +
+ * the request host to decide which subdomain the session is allowed
+ * to access.
  */
 export const authConfig: NextAuthConfig = {
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
@@ -18,17 +21,23 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = 'admin';
-        token.id = user.id;
+        const u = user as { role?: string; id?: string; profileId?: string; email?: string | null };
+        const t = token as Record<string, unknown>;
+        t.role = u.role ?? 'admin';
+        t.id   = u.id;
+        if (u.profileId) t.profileId = u.profileId;
+        if (u.email)     t.email     = u.email;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        // @ts-expect-error — augmenting Session.user.
-        session.user.role = token.role ?? 'admin';
-        // @ts-expect-error — augmenting Session.user.
-        session.user.id = token.id ?? 'admin';
+        const t = token as Record<string, unknown>;
+        const su = session.user as unknown as Record<string, unknown>;
+        su.role = (t.role as string | undefined) ?? 'admin';
+        su.id   = (t.id   as string | undefined) ?? 'admin';
+        if (t.profileId) su.profileId = t.profileId;
+        if (t.email && !session.user.email) session.user.email = t.email as string;
       }
       return session;
     },

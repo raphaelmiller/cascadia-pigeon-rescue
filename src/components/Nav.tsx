@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Bird, Home, Pill, Inbox, NotebookPen, Calendar,
-  Truck, Siren, Bandage, Boxes, BellRing, Archive, LogOut,
+  Truck, Siren, Bandage, Boxes, BellRing, Archive, LogOut, Users,
 } from 'lucide-react';
 import { logoutAction } from '@/lib/auth-actions';
 
@@ -25,6 +25,7 @@ const SECONDARY_NAV = [
   { href: '/updates', label: 'Updates', icon: NotebookPen },
   { href: '/transport', label: 'Drivers', icon: Truck },
   { href: '/rescue', label: 'Rescuers', icon: Siren },
+  { href: '/volunteers', label: 'Volunteers', icon: Users },
   { href: '/bandages', label: 'Bandages', icon: Bandage },
   { href: '/supplies', label: 'Supplies', icon: Boxes },
   { href: '/archive', label: 'Archive', icon: Archive },

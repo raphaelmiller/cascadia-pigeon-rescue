@@ -1,0 +1,145 @@
+// HistoryRow -- compact row used by /v/transport and /v/rescue list
+// pages. Quieter than AssignmentCard (which is the bright dashboard
+// version). Same data shape; different render style.
+
+import {
+  claimPointPersonAction,
+  declineAction,
+  figuredOutAction,
+} from '@/app/(volunteer)/v/actions';
+import type { HistoryItem } from '@/lib/volunteer/assignment-history';
+import { AlertTriangle, Check, Clock } from 'lucide-react';
+
+function fmtDeadline(d: Date | null): string {
+  if (!d) return '';
+  const ms = d.getTime() - Date.now();
+  const min = Math.round(ms / 60000);
+  if (min < 0) return `overdue ${Math.abs(min)}m`;
+  if (min < 60) return `in ${min}m`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `in ${hr}h`;
+  return d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+function fmtWhen(d: Date | null): string {
+  if (!d) return '';
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+const JOB_STATUS_LABEL: Record<string, string> = {
+  // rescue
+  needs_rescue: '🚨 Needs rescue',
+  rescued: '✅ Rescued',
+  escaped_flew_away: '💨 Escaped',
+  closed_unable: '❌ Closed',
+  // transport
+  open: 'Open',
+  assigned: 'Assigned',
+  in_transit: 'In transit',
+  delivered: '✅ Delivered',
+  cancelled: 'Cancelled',
+};
+
+function statusBadgeTone(status: string): string {
+  if (['rescued', 'delivered'].includes(status)) return 'bg-emerald-100 text-emerald-900';
+  if (['escaped_flew_away', 'in_transit'].includes(status)) return 'bg-blue-100 text-blue-900';
+  if (['closed_unable', 'cancelled'].includes(status)) return 'bg-gray-100 text-gray-700';
+  if (status === 'needs_rescue') return 'bg-red-100 text-red-900';
+  return 'bg-yellow-100 text-yellow-900';
+}
+
+export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' | 'recent' }) {
+  const showActions = kind === 'active';
+  const showActionBar = showActions && (
+    !item.pointPersonId || item.pointPersonIsMe
+  );
+
+  return (
+    <li className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 p-3 space-y-2">
+      <div className="flex items-start gap-3">
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.emergencyFlag && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-red-600 text-white">
+                <AlertTriangle size={10} /> Emergency
+              </span>
+            )}
+            {item.currentTier && item.currentTier > 1 && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 text-amber-900">
+                Escalated · T{item.currentTier}
+              </span>
+            )}
+            <span className={`text-[10px] font-medium uppercase tracking-wide rounded-full px-2 py-0.5 ${statusBadgeTone(item.jobStatus)}`}>
+              {JOB_STATUS_LABEL[item.jobStatus] ?? item.jobStatus}
+            </span>
+            {item.deadline && !item.resolved && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-gray-600">
+                <Clock size={11} /> {fmtDeadline(item.deadline)}
+              </span>
+            )}
+          </div>
+
+          <h3 className="mt-1 text-sm font-semibold text-gray-900 truncate">{item.title}</h3>
+          {item.location && <p className="text-xs text-gray-600 truncate">{item.location}</p>}
+          {item.description && (
+            <p className="text-xs text-gray-700 mt-0.5 line-clamp-2">{item.description}</p>
+          )}
+
+          {/* Role markers */}
+          {item.pointPersonIsMe && !item.resolved && (
+            <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-100 ring-1 ring-emerald-200 rounded-full px-2 py-0.5">
+              <Check size={11} /> You are Point Person
+            </div>
+          )}
+          {item.pointPersonId && !item.pointPersonIsMe && (
+            <p className="mt-1 text-[11px] text-gray-600">
+              Point Person: <span className="font-medium text-gray-800">{item.pointPersonName}</span>
+            </p>
+          )}
+          {item.status === 'declined' && (
+            <p className="mt-1 text-[11px] text-gray-500 italic">
+              You marked unavailable {fmtWhen(item.declinedAt)}
+            </p>
+          )}
+          {kind === 'recent' && item.pointPersonIsMe && (
+            <p className="mt-1 text-[11px] text-emerald-700">
+              You were Point Person · finished {fmtWhen(item.figuredOutAt ?? item.claimedAt)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {showActionBar && (
+        <div className="flex gap-2 flex-wrap pt-1">
+          {!item.pointPersonId && (
+            <>
+              <form action={claimPointPersonAction}>
+                <input type="hidden" name="jobType" value={item.jobType} />
+                <input type="hidden" name="jobId" value={item.jobId} />
+                <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5">
+                  Claim Point Person
+                </button>
+              </form>
+              <form action={declineAction}>
+                <input type="hidden" name="jobType" value={item.jobType} />
+                <input type="hidden" name="jobId" value={item.jobId} />
+                <button type="submit" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300">
+                  Unavailable
+                </button>
+              </form>
+            </>
+          )}
+          {item.pointPersonIsMe && (
+            <form action={figuredOutAction}>
+              <input type="hidden" name="jobType" value={item.jobType} />
+              <input type="hidden" name="jobId" value={item.jobId} />
+              <button type="submit" className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5">
+                Figured Out
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
