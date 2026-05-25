@@ -10,7 +10,14 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requireVolunteer } from '@/lib/volunteer/auth';
-import { claimPointPerson, markUnavailable, markFiguredOut, type JobType } from '@/lib/volunteer/dispatch';
+import {
+  claimPointPerson,
+  markUnavailable,
+  markFiguredOut,
+  unmarkFiguredOut,
+  undoDecline,
+  type JobType,
+} from '@/lib/volunteer/dispatch';
 import {
   resolveJob,
   passUnable,
@@ -58,8 +65,44 @@ export async function figuredOutAction(fd: FD): Promise<void> {
   const v = await requireVolunteer();
   const { jobType, jobId } = jobFromForm(fd);
   await markFiguredOut({ jobType, jobId, profileId: v.profileId });
+  const back = jobType === 'RescueCase' ? `/rescue/case/${jobId}` : '/';
   revalidatePath('/');
-  redirect('/?msg=figured_out');
+  revalidatePath(back);
+  redirect(`${back}?msg=figured_out`);
+}
+
+// Christina feedback (2026-05-25): undo for Figured Out / Handled.
+// Clears figuredOutAt and re-opens the dispatch cycle so the volunteer
+// pool gets re-pinged. See unmarkFiguredOut() in dispatch.ts for the
+// underlying state machine.
+export async function unmarkFiguredOutAction(fd: FD): Promise<void> {
+  const v = await requireVolunteer();
+  const { jobType, jobId } = jobFromForm(fd);
+  const result = await unmarkFiguredOut({ jobType, jobId, profileId: v.profileId });
+  const back = jobType === 'RescueCase' ? `/rescue/case/${jobId}` : '/';
+  if (!result.ok) {
+    redirect(`${back}?msg=unmark_failed:${result.reason}`);
+  }
+  revalidatePath('/');
+  revalidatePath('/rescue');
+  revalidatePath(back);
+  redirect(`${back}?msg=unmarked_handled`);
+}
+
+// Christina feedback (2026-05-25): undo for Unavailable / decline.
+// Re-opens the volunteer's Assignment row from 'declined' → 'notified'
+// so they're back in the pool for THIS job. No global state change.
+export async function undoDeclineAction(fd: FD): Promise<void> {
+  const v = await requireVolunteer();
+  const { jobType, jobId } = jobFromForm(fd);
+  const result = await undoDecline({ jobType, jobId, profileId: v.profileId });
+  if (!result.ok) {
+    redirect(`/?msg=undecline_failed:${result.reason}`);
+  }
+  revalidatePath('/');
+  revalidatePath('/rescue');
+  revalidatePath('/transport');
+  redirect('/?msg=undeclined');
 }
 
 // Status transitions -- only allowed for the current Point Person on

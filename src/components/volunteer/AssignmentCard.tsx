@@ -233,9 +233,13 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                       <button
                         type="submit"
                         className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
-                        title="Mark figured out without resolving the case"
+                        // Christina feedback 2026-05-25: "how are we defining 'figured out'?"
+                        // Tooltip is the first line of defense for new volunteers; the full
+                        // explanation lives on the case detail page.
+                        title="Mark as Handled — use this when the situation was sorted outside the app (someone arranged transport via text, the bird was already picked up, etc.). Stops the fan-out without resolving the case."
                       >
-                        Figured Out
+                        Mark as Handled
+                        <span className="ml-1 text-[10px] text-gray-400 font-normal">(Figured Out)</span>
                       </button>
                     </form>
                   </>
@@ -247,7 +251,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                     href={`/rescue/case/${a.jobId}`}
                     className="text-[11px] text-teal-700 hover:underline mt-1"
                   >
-                    Add notes / photos / Figured Out →
+                    Add notes / photos / Mark as Handled →
                   </Link>
                 )}
               </>

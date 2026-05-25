@@ -252,7 +252,19 @@ export async function sweepEscalations(): Promise<SweepResult> {
         to: r.phone,
         tag: `dispatch_t${nextTier}`,
         dedupeKey: `${dedupePrefix}:${r.id}`,
-        body: smsBody({ job, tier: nextTier, isEmergency: false, recipientName: r.name, escalated: true }),
+        body: smsBody({
+          job,
+          tier: nextTier,
+          isEmergency: false,
+          recipientName: r.name,
+          escalated: true,
+          // Christina feedback (2026-05-25): when a tier-1 timer expired with
+          // no Point Person claimed, the tier-2 SMS to coordinators needs to
+          // explicitly say "no Point Person claimed — please check in with
+          // volunteers so someone takes it." That's the whole purpose of the
+          // tier-2 ping; previous copy was too generic.
+          escalationReason: 'no_claim',
+        }),
       });
       if (res.ok) sent++;
     }
@@ -489,6 +501,90 @@ export async function markFiguredOut(args: {
   return { ok: true };
 }
 
+/**
+ * Christina feedback (2026-05-25): "Actions should be able to be undone
+ * if someone misunderstood something or pressed something by accident."
+ *
+ * unmarkFiguredOut clears `figuredOutAt` and re-opens the dispatch /
+ * escalation cycle. Only valid while the underlying job is still in an
+ * active state (not resolved). Re-dispatch runs through dispatchJob()
+ * which is idempotent.
+ */
+export async function unmarkFiguredOut(args: {
+  jobType: JobType;
+  jobId: string;
+  profileId: string;
+}): Promise<{ ok: boolean; reason?: 'not_marked' | 'job_resolved' | 'not_found' }> {
+  const { jobType, jobId, profileId } = args;
+  const job = await loadJob(jobType, jobId);
+  if (!job) return { ok: false, reason: 'not_found' };
+  if (!job.figuredOutAt) return { ok: false, reason: 'not_marked' };
+  if (job.resolved) return { ok: false, reason: 'job_resolved' };
+
+  if (jobType === 'RescueCase') {
+    await prisma.rescueCase.update({ where: { id: jobId }, data: { figuredOutAt: null } });
+  } else {
+    await prisma.transportRequest.update({ where: { id: jobId }, data: { figuredOutAt: null } });
+  }
+  await logEvent({
+    profileId,
+    category: jobType === 'RescueCase' ? 'rescue' : 'transport',
+    kind: `${jobType === 'RescueCase' ? 'rescue' : 'transport'}.figured_out_undone`,
+    pointDelta: 0,
+    refType: jobType,
+    refId: jobId,
+  });
+  // Re-open the dispatch cycle. dispatchJob is idempotent on Assignment
+  // upsert and skips already-open Escalation tiers, so calling it again
+  // is safe — it'll just kick a fresh tier-1 row + SMS if everything
+  // had been closed.
+  try {
+    await dispatchJob(jobType, jobId, { reason: 'figured_out_undone' });
+  } catch (err) {
+    console.error('[unmarkFiguredOut] re-dispatch failed', err);
+  }
+  return { ok: true };
+}
+
+/**
+ * Christina feedback (2026-05-25): undo for "Unavailable" (decline).
+ * A volunteer who hit Unavailable by accident should be able to re-join
+ * the candidate pool for this specific job. We flip the Assignment row
+ * back from 'declined' to 'notified' (the original state). Only valid
+ * while the job is still actively dispatchable — if it's already
+ * resolved, figured-out, or has a Point Person, we refuse.
+ */
+export async function undoDecline(args: {
+  jobType: JobType;
+  jobId: string;
+  profileId: string;
+}): Promise<{ ok: boolean; reason?: 'not_declined' | 'job_resolved' | 'already_claimed' }> {
+  const { jobType, jobId, profileId } = args;
+
+  const job = await loadJob(jobType, jobId);
+  if (!job) return { ok: false, reason: 'job_resolved' };
+  if (job.resolved || job.figuredOutAt) return { ok: false, reason: 'job_resolved' };
+  // If someone else has already claimed PP, it's fine to re-open the
+  // Assignment row — the volunteer might want to back them up. So we
+  // don't gate on pointPersonId here.
+
+  const r = await prisma.assignment.updateMany({
+    where: { jobType, jobId, profileId, status: 'declined' },
+    data: { status: 'notified', declinedAt: null },
+  });
+  if (r.count === 0) return { ok: false, reason: 'not_declined' };
+
+  await logEvent({
+    profileId,
+    category: jobType === 'RescueCase' ? 'rescue' : 'transport',
+    kind: jobType === 'RescueCase' ? 'rescue.decline_undone' : 'transport.decline_undone',
+    pointDelta: 0,
+    refType: jobType,
+    refId: jobId,
+  });
+  return { ok: true };
+}
+
 // ---- internals ----
 
 async function loadJob(jobType: JobType, jobId: string): Promise<JobSummary | null> {
@@ -643,16 +739,47 @@ function smsBody(args: {
   isEmergency: boolean;
   recipientName: string;
   escalated?: boolean;
+  /**
+   * When the dispatch engine promotes a tier-1 escalation that timed
+   * out unclaimed, the resulting tier-2 row is created with
+   * `reason='no_claim'`. We thread that through here so the SMS body to
+   * coordinators is explicit about WHY they're being pinged: nobody
+   * grabbed Point Person, please check in with volunteers and make
+   * sure someone takes it. (Christina feedback 2026-05-25.)
+   */
+  escalationReason?: string;
 }): string {
-  const { job, tier, isEmergency, recipientName, escalated } = args;
+  const { job, tier, isEmergency, escalated, escalationReason } = args;
+
+  // Format the deadline as a readable "in Xm" or wall-clock string so
+  // the coordinator copy can talk concretely about how soon the shift
+  // starts.
+  const deadline = job.deadline;
+  let deadlineStr = '';
+  let deadlineRelStr = '';
+  if (deadline) {
+    const wall = deadline.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    deadlineStr = ` - by ${wall}`;
+    const mins = Math.round((deadline.getTime() - Date.now()) / 60000);
+    if (mins <= 0) deadlineRelStr = `now overdue ${Math.abs(mins)}m`;
+    else if (mins < 60) deadlineRelStr = `in ${mins} min`;
+    else deadlineRelStr = `at ${wall}`;
+  }
+
+  // Special-cased tier-2 "no Point Person claimed" copy (Christina
+  // feedback 2026-05-25). Coordinator needs to know: nobody claimed,
+  // shift is starting, please nudge somebody to take it.
+  if (tier === 2 && escalated && escalationReason === 'no_claim') {
+    const when = deadlineRelStr ? ` Shift starts ${deadlineRelStr}.` : '';
+    return `\u26a0\ufe0f No Point Person claimed for ${job.title}.${when} ` +
+      `Please check in with volunteers to make sure someone takes it.`;
+  }
+
   const prefix = isEmergency
     ? '\ud83d\udea8 EMERGENCY'
     : escalated
     ? `\u26a0\ufe0f  ESCALATED (T${tier})`
     : `CPR (T${tier})`;
-  const deadlineStr = job.deadline
-    ? ` - by ${job.deadline.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
-    : '';
   return `${prefix}: ${job.title}${deadlineStr}. ` +
     `Open the portal to claim or decline.`;
 }

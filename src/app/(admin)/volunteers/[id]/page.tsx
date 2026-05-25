@@ -39,11 +39,28 @@ export default async function VolunteerDetailPage({
   if (!profile) notFound();
 
   const tags = new Set(parseRoleTags(profile.roleTags));
-  const recentEvents = await prisma.volunteerEvent.findMany({
-    where: { profileId: id },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-  });
+  const [recentEvents, historicalAgg, historicalEvents] = await Promise.all([
+    prisma.volunteerEvent.findMany({
+      where: { profileId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+    // Christina feedback (2026-05-25): surface a distinct "Historical"
+    // badge / section on the contribution breakdown so backfilled
+    // pre-portal points read differently from earned-on-portal points.
+    prisma.volunteerEvent.aggregate({
+      where: { profileId: id, category: 'historical', reversedAt: null },
+      _sum: { pointDelta: true },
+      _count: { _all: true },
+    }),
+    prisma.volunteerEvent.findMany({
+      where: { profileId: id, category: 'historical', reversedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+  ]);
+  const historicalTotal = historicalAgg._sum.pointDelta ?? 0;
+  const historicalCount = historicalAgg._count._all;
 
   return (
     <div className="space-y-4">
@@ -144,6 +161,60 @@ export default async function VolunteerDetailPage({
           currentName={profile.rescue?.name ?? null}
           options={allRescue}
         />
+      </Card>
+
+      {/* Christina feedback (2026-05-25): a distinct Historical section so
+          pre-portal backfilled points are visually separate from points
+          earned through the portal. */}
+      <Card>
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <h2 className="text-base font-semibold text-gray-900 inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs font-bold rounded-full px-2 py-0.5 bg-amber-100 text-amber-900 ring-1 ring-amber-200">
+              🏆 Historical
+            </span>
+            <span>Pre-portal contributions</span>
+          </h2>
+          <div className="flex gap-2">
+            <Btn href={`/volunteers/historical?volunteerId=${profile.id}`} variant="ghost">
+              Grant count-based
+            </Btn>
+            <Btn href={`/volunteers/${profile.id}/seed`} variant="ghost">
+              Grant flat (years, fundraising, …)
+            </Btn>
+          </div>
+        </div>
+        {historicalCount === 0 ? (
+          <p className="text-sm text-gray-500 italic">
+            No historical entries yet. Use <em>Grant count-based</em> for
+            rescues / drives / coordination / fostering counts; use
+            <em> Grant flat</em> for years-of-service or one-off bonuses.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-800 mb-2">
+              <strong className="text-emerald-700">+{historicalTotal} pts</strong> across {historicalCount} historical grant{historicalCount === 1 ? '' : 's'}.
+            </p>
+            <ul className="divide-y divide-gray-100">
+              {historicalEvents.map(e => (
+                <li key={e.id} className="py-2 text-xs flex items-start gap-3">
+                  <div className="flex-grow min-w-0">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-mono text-gray-700 truncate">{e.kind}</span>
+                      <span className="text-[10px] text-gray-400">{fmtDateTime(e.createdAt)}</span>
+                    </div>
+                    {e.notes && <p className="text-gray-600 mt-0.5 break-words">{e.notes}</p>}
+                  </div>
+                  <span className="font-semibold text-emerald-700 flex-shrink-0">{e.pointDelta > 0 ? '+' : ''}{e.pointDelta}</span>
+                </li>
+              ))}
+            </ul>
+            {historicalCount > historicalEvents.length && (
+              <p className="text-[11px] text-gray-500 mt-2">
+                Showing the most recent {historicalEvents.length} of {historicalCount}.
+              </p>
+            )}
+          </>
+        )}
       </Card>
 
       <Card>

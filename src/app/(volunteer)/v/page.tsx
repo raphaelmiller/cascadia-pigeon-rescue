@@ -138,7 +138,14 @@ function MessageBanner({ msg }: { msg: string }) {
   let text: string | null = null;
   if (msg === 'claimed') text = '✅ Claimed. You are now Point Person.';
   else if (msg === 'declined') text = '👋 Marked unavailable.';
-  else if (msg === 'figured_out') text = '✅ Marked figured out. Escalations closed.';
+  // Christina feedback (2026-05-25): consistent undo language across
+  // the dashboard banner. "Mark as Handled" is the new label for
+  // figuredOut; "Un-decline" is the undo for declined assignments.
+  else if (msg === 'figured_out') text = '✅ Marked as Handled. Fan-out paused; case stays open.';
+  else if (msg === 'unmarked_handled') text = '✅ Un-marked. Dispatch re-opened.';
+  else if (msg === 'undeclined') text = '✅ You’re back in the pool for that job.';
+  else if (msg.startsWith('undecline_failed')) text = '⚠️ Couldn’t un-decline — the job may already be claimed or resolved.';
+  else if (msg.startsWith('unmark_failed')) text = '⚠️ Couldn’t un-mark — case may already be resolved.';
   else if (msg.startsWith('resolved:')) {
     const [, status, ptsStr] = msg.split(':');
     const label = RESOLUTION_LABELS[status] ?? `Resolved → ${status}`;

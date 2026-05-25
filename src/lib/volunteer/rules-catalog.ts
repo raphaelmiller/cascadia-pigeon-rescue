@@ -371,6 +371,39 @@ export const RULES_CATALOG: RuleSeed[] = [
     category: 'historical',
     suggestedPoints: 0,
   },
+  // Christina feedback (2026-05-25): count-based historical grants for
+  // pre-portal work. Volunteers describe their contributions ("I've
+  // rescued ~30 birds, done ~20 driver runs") and Christina enters the
+  // counts. `suggestedPoints` here is the PER-UNIT value — the admin
+  // page multiplies by the count.
+  {
+    kind: 'historical.rescues_count',
+    label: 'Historical rescues (per bird)',
+    description: 'Per-bird credit for rescues performed before the portal existed.',
+    category: 'historical',
+    suggestedPoints: 10,
+  },
+  {
+    kind: 'historical.transport_drives_count',
+    label: 'Historical transport drives (per drive)',
+    description: 'Per-drive credit for transport runs done before the portal.',
+    category: 'historical',
+    suggestedPoints: 5,
+  },
+  {
+    kind: 'historical.coordination_count',
+    label: 'Historical coordination shifts (per shift)',
+    description: 'Per-shift credit for past coordinator / lead duties.',
+    category: 'historical',
+    suggestedPoints: 3,
+  },
+  {
+    kind: 'historical.foster_count',
+    label: 'Historical foster placements (per bird)',
+    description: 'Per-bird credit for past fostering before the portal.',
+    category: 'historical',
+    suggestedPoints: 8,
+  },
 ];
 
 export const CATEGORY_ORDER: RuleCategory[] = [

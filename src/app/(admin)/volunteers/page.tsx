@@ -29,9 +29,12 @@ export default async function VolunteersPage({
       <SystemStatusBanner />
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <H1>Volunteer profiles</H1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Btn href="/volunteers/rules" variant="ghost">
             Point rules
+          </Btn>
+          <Btn href="/volunteers/historical" variant="ghost">
+            Historical points
           </Btn>
           <Btn href="/volunteers?new=1" variant="primary">
             <UserPlus size={16} /> Onboard volunteer

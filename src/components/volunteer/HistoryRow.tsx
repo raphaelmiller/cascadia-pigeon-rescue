@@ -6,9 +6,10 @@ import {
   claimPointPersonAction,
   declineAction,
   figuredOutAction,
+  undoDeclineAction,
 } from '@/app/(volunteer)/v/actions';
 import type { HistoryItem } from '@/lib/volunteer/assignment-history';
-import { AlertTriangle, Check, Clock } from 'lucide-react';
+import { AlertTriangle, Check, Clock, RotateCcw } from 'lucide-react';
 
 function fmtDeadline(d: Date | null): string {
   if (!d) return '';
@@ -97,9 +98,28 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
             </p>
           )}
           {item.status === 'declined' && (
-            <p className="mt-1 text-[11px] text-gray-500 italic">
-              You marked unavailable {fmtWhen(item.declinedAt)}
-            </p>
+            <div className="mt-1 flex items-center gap-2 flex-wrap">
+              <p className="text-[11px] text-gray-500 italic">
+                You marked unavailable {fmtWhen(item.declinedAt)}
+              </p>
+              {/* Christina feedback (2026-05-25): every action should be
+                  reversible. Un-decline puts the volunteer back in the
+                  pool for this specific job. Only renders while the job
+                  is still active (not resolved). */}
+              {!item.resolved && (
+                <form action={undoDeclineAction}>
+                  <input type="hidden" name="jobType" value={item.jobType} />
+                  <input type="hidden" name="jobId" value={item.jobId} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-[11px] font-medium px-2 py-0.5 ring-1 ring-gray-300"
+                    title="Pressed Unavailable by accident? Tap to re-join the pool for this job."
+                  >
+                    <RotateCcw size={10} /> Un-decline
+                  </button>
+                </form>
+              )}
+            </div>
           )}
           {kind === 'recent' && item.pointPersonIsMe && (
             <p className="mt-1 text-[11px] text-emerald-700">
@@ -133,8 +153,12 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
             <form action={figuredOutAction}>
               <input type="hidden" name="jobType" value={item.jobType} />
               <input type="hidden" name="jobId" value={item.jobId} />
-              <button type="submit" className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5">
-                Figured Out
+              <button
+                type="submit"
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5"
+                title="Mark as Handled — use when the situation was sorted outside the app. Stops the fan-out without resolving the case."
+              >
+                Mark as Handled <span className="ml-1 text-[10px] opacity-80 font-normal">(Figured Out)</span>
               </button>
             </form>
           )}

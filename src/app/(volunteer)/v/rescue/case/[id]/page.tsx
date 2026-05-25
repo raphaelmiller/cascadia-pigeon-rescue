@@ -25,6 +25,7 @@ import {
   takeoverAction,
   claimPointPersonAction,
   figuredOutAction,
+  unmarkFiguredOutAction,
 } from '@/app/(volunteer)/v/actions';
 import {
   canVolunteerUndo,
@@ -126,6 +127,10 @@ export default async function VolunteerRescueCasePage({
           {sp.msg === 'takeover_failed:too_soon' && '⚠️ The lead is still within the activity window. Try again later.'}
           {sp.msg === 'takeover_failed:race_lost' && '⚠️ Someone beat you to the take-over.'}
           {sp.msg === 'takeover_failed:already_pp' && '✅ You’re already Point Person.'}
+          {sp.msg === 'figured_out' && '✅ Marked as Handled. Fan-out paused; case stays open.'}
+          {sp.msg === 'unmarked_handled' && '✅ Un-marked. Dispatch re-opened.'}
+          {sp.msg === 'undeclined' && '✅ You’re back in. We’ll re-notify if needed.'}
+          {sp.msg?.startsWith('undecline_failed') && '⚠️ Couldn’t un-decline — the case may already be claimed or resolved.'}
         </div>
       )}
 
@@ -359,17 +364,59 @@ export default async function VolunteerRescueCasePage({
           )}
         </div>
 
-        {/* Figured Out ghost link — small, low-key. Power-user action. */}
-        {isPointPerson && !isResolved && (
-          <form action={figuredOutAction} className="pt-2 border-t border-gray-100">
+        {/* PR-Christina-feedback: Figured Out / Handled block.
+            Christina (2026-05-25): "How are we defining 'figured out'? Is
+            it clear to people when and why they should mark things
+            'figured out'?" Old UI was a tiny ghost link with one-line
+            tooltip — not enough context for new volunteers. New copy
+            spells out the use-case + makes the action reversible. */}
+        {isPointPerson && !isResolved && !c.figuredOutAt && (
+          <form action={figuredOutAction} className="pt-3 border-t border-gray-100 space-y-2">
             <input type="hidden" name="jobType" value="RescueCase" />
             <input type="hidden" name="jobId" value={c.id} />
+            <div>
+              <p className="text-xs font-semibold text-gray-700">Situation handled outside the app?</p>
+              <p className="text-[11px] text-gray-600 mt-1 leading-snug">
+                Use “Mark as Handled” (a.k.a. Figured Out) when something
+                was sorted without going through the portal — e.g. someone
+                arranged transport via text, the bird was already picked
+                up, or the reporter says the issue resolved itself. This
+                stops notifications to other volunteers but keeps the case
+                <strong> open </strong> for notes. You can undo it anytime.
+              </p>
+            </div>
             <button
               type="submit"
-              className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
-              title="Close escalations without changing the case status (e.g. you're on your way, stop the fan-out)."
+              className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3 py-1.5 ring-1 ring-gray-300"
             >
-              Figured Out (stop the fan-out without resolving)
+              Mark as Handled <span className="text-[10px] text-gray-400 font-normal">(Figured Out)</span>
+            </button>
+          </form>
+        )}
+
+        {/* PR-Christina-feedback: Un-mark Handled (undo for Figured Out).
+            Christina: "Actions should be able to be undone if someone
+            misunderstood something or pressed something by accident."
+            Clearing figuredOutAt re-opens the fan-out via dispatchJob(). */}
+        {isPointPerson && !isResolved && c.figuredOutAt && (
+          <form action={unmarkFiguredOutAction} className="pt-3 border-t border-gray-100 space-y-2">
+            <input type="hidden" name="jobType" value="RescueCase" />
+            <input type="hidden" name="jobId" value={c.id} />
+            <div>
+              <p className="text-xs font-semibold text-amber-900">
+                This case is marked <em>Handled</em> (Figured Out) — fan-out is paused.
+              </p>
+              <p className="text-[11px] text-amber-800 mt-1 leading-snug">
+                If you tapped this by accident or the situation isn’t
+                actually handled, un-mark to re-open the dispatch + notify
+                the volunteer pool again.
+              </p>
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+            >
+              Un-mark Handled (re-open dispatch)
             </button>
           </form>
         )}

@@ -1,5 +1,21 @@
 // Cascadia Pigeon Rescue — SMS adapter.
 //
+// SMS IS THE PRIMARY DISPATCH CHANNEL. Christina (2026-05-25 feedback):
+// "Unfortunately I think it needs SMS to work as nobody checks their
+// email." Every dispatch fan-out, tier escalation, pre-shift nudge,
+// and tier-3 page goes through sendSms() in this file. Email
+// (lib/notify/email.ts) is secondary — used for magic links + the
+// optional daily digest only, NOT for time-critical dispatch.
+//
+// Going live: drop real values into the env, no code change needed.
+//   TWILIO_ACCOUNT_SID    (real SID, must NOT start with "STUB_" or "ACxxxx")
+//   TWILIO_AUTH_TOKEN
+//   TWILIO_FROM           (E.164 sender number)
+//   SMS_MONTHLY_CEILING_USD  (optional, defaults $50)
+//   SMS_COST_PER_MSG_USD     (optional, defaults $0.008)
+// Until those are set, resolveMode() returns 'stub' and we log to the
+// outbox + SmsLedger but do not actually send.
+//
 // Wraps Twilio + a hard monthly spend ceiling. Three modes, mirroring
 // email.ts:
 //
