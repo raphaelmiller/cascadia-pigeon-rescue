@@ -107,7 +107,7 @@ export default async function DispatchBoardPage({
       {concernsCount > 0 && (
         <a
           href="/dispatch/concerns"
-          className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 shadow ring-1 ring-amber-300 hover:ring-amber-400 hover:bg-amber-100 px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-2xl bg-amber-50 shadow ring-1 ring-amber-300 hover:ring-amber-400 hover:bg-amber-100 px-4 py-3"
         >
           <div className="flex items-center gap-2">
             <Eye size={18} className="text-amber-700" />
@@ -157,7 +157,7 @@ export default async function DispatchBoardPage({
 function Section({ title, children }: { title: string; tone: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+      <h2 className="cpr-section-header mb-2 px-1">
         {title}
       </h2>
       <div className="space-y-2">{children}</div>
@@ -167,7 +167,7 @@ function Section({ title, children }: { title: string; tone: string; children: R
 
 function PendingRow({ r }: { r: PendingReview }) {
   return (
-    <li className="rounded-xl bg-white shadow-sm ring-1 ring-violet-200 px-3 py-2 flex items-start gap-3">
+    <li className="rounded-2xl bg-white shadow-sm ring-1 ring-violet-200 px-3 py-2 flex items-start gap-3">
       <div className="flex-grow min-w-0">
         <p className="text-sm font-semibold text-gray-900">
           {r.profileName}
@@ -180,13 +180,13 @@ function PendingRow({ r }: { r: PendingReview }) {
       <div className="flex-shrink-0 flex gap-1">
         <form action={approvePendingAction}>
           <input type="hidden" name="eventId" value={r.eventId} />
-          <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-2.5 py-1">
+          <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-2.5 py-1">
             Approve
           </button>
         </form>
         <form action={rejectPendingAction}>
           <input type="hidden" name="eventId" value={r.eventId} />
-          <button type="submit" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-2.5 py-1 ring-1 ring-gray-300">
+          <button type="submit" className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-2.5 py-1 ring-1 ring-gray-300">
             Reject
           </button>
         </form>
@@ -201,7 +201,7 @@ function BoardCard({ j }: { j: BoardJob }) {
   const claimed = !!j.pointPersonId;
 
   return (
-    <div className={`rounded-xl border-l-4 ${tierTone(j)} ring-1 ring-gray-200 px-3 py-3 space-y-2`}>
+    <div className={`rounded-2xl border-l-4 ${tierTone(j)} ring-1 ring-gray-200 px-3 py-3 space-y-2`}>
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           {j.emergencyFlag ? <AlertTriangle size={18} className="text-red-600" /> : <Icon size={18} className="text-gray-600" />}
@@ -245,13 +245,13 @@ function BoardCard({ j }: { j: BoardJob }) {
             <form action={manualClaimAction} className="flex gap-1">
               <input type="hidden" name="jobType" value={j.jobType} />
               <input type="hidden" name="jobId" value={j.jobId} />
-              <select name="targetProfileId" defaultValue="" className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs">
+              <select name="targetProfileId" defaultValue="" className="rounded-full border border-gray-300 bg-white px-2 py-1 text-xs">
                 <option value="" disabled>Claim on behalf of…</option>
                 {claimable.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-2.5 py-1">
+              <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-2.5 py-1">
                 Assign
               </button>
             </form>
@@ -259,7 +259,7 @@ function BoardCard({ j }: { j: BoardJob }) {
           <form action={redispatchAction}>
             <input type="hidden" name="jobType" value={j.jobType} />
             <input type="hidden" name="jobId" value={j.jobId} />
-            <button type="submit" className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-2.5 py-1 ring-1 ring-gray-300">
+            <button type="submit" className="inline-flex items-center gap-1 rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-2.5 py-1 ring-1 ring-gray-300">
               <RefreshCw size={11} /> Re-dispatch
             </button>
           </form>
@@ -267,7 +267,7 @@ function BoardCard({ j }: { j: BoardJob }) {
             <form action={forceEscalateAction}>
               <input type="hidden" name="jobType" value={j.jobType} />
               <input type="hidden" name="jobId" value={j.jobId} />
-              <button type="submit" className="inline-flex items-center gap-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-medium px-2.5 py-1 ring-1 ring-amber-300">
+              <button type="submit" className="inline-flex items-center gap-1 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-medium px-2.5 py-1 ring-1 ring-amber-300">
                 <FastForward size={11} /> Escalate
               </button>
             </form>

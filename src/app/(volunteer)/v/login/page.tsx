@@ -84,7 +84,7 @@ export default async function VolunteerLoginPage({
 
         {bypassEnabled && (
           <form action={devBypassSignInAction} className="space-y-3 mb-5 pb-5 border-b border-dashed border-yellow-300">
-            <div className="rounded-lg bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-[11px] text-yellow-900">
+            <div className="rounded-full bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-[11px] text-yellow-900">
               <strong>Dev bypass is ON.</strong> Pick a volunteer to sign in
               instantly. Disable by unsetting <code>DEV_BYPASS_AUTH</code>.
             </div>
@@ -97,7 +97,7 @@ export default async function VolunteerLoginPage({
                 name="email"
                 required
                 defaultValue=""
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
               >
                 <option value="" disabled>— Pick a volunteer —</option>
                 {bypassOptions.map(o => (
@@ -109,7 +109,7 @@ export default async function VolunteerLoginPage({
             </label>
             <button
               type="submit"
-              className="w-full rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white font-medium text-sm px-4 py-2.5 transition"
+              className="w-full rounded-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium text-sm px-4 py-2.5 transition"
             >
               Sign in (dev bypass)
             </button>
@@ -130,12 +130,12 @@ export default async function VolunteerLoginPage({
               autoComplete="email"
               required
               autoFocus={!bypassEnabled}
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+              className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
               placeholder="you@example.com"
             />
           </div>
           {sp.error && (
-            <div className="rounded-lg bg-red-50 ring-1 ring-red-200 px-3 py-2 text-xs text-red-800">
+            <div className="rounded-full bg-red-50 ring-1 ring-red-200 px-3 py-2 text-xs text-red-800">
               {sp.error === 'invalid' && 'That link is invalid or expired. Try again.'}
               {sp.error === 'used' && 'That link was already used. Request a new one.'}
               {sp.error === 'expired' && 'That link has expired. Request a new one.'}
@@ -144,7 +144,7 @@ export default async function VolunteerLoginPage({
           )}
           <button
             type="submit"
-            className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5 transition"
+            className="w-full rounded-full bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5 transition"
           >
             Email me a link
           </button>

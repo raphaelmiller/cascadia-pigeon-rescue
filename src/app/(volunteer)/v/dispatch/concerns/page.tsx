@@ -51,7 +51,7 @@ export default async function VolunteerConcernsFeedPage() {
             const meta = PULSE_META[c.pulse];
             const Icon = meta.Icon;
             return (
-              <li key={c.id} className={`rounded-xl bg-white shadow ring-1 p-3 flex items-start gap-3 ${meta.tone.includes('red') ? 'ring-red-200' : meta.tone.includes('orange') ? 'ring-orange-200' : 'ring-yellow-200'}`}>
+              <li key={c.id} className={`rounded-2xl bg-white shadow ring-1 p-3 flex items-start gap-3 ${meta.tone.includes('red') ? 'ring-red-200' : meta.tone.includes('orange') ? 'ring-orange-200' : 'ring-yellow-200'}`}>
                 <div className={`flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full ring-1 ${meta.tone}`}>
                   <Icon size={14} />
                 </div>

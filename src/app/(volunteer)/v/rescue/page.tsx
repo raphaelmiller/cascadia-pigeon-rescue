@@ -61,15 +61,17 @@ function Section({
   const childCount = Array.isArray(children) ? children.filter(Boolean).length : (children ? 1 : 0);
   return (
     <div>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+      {/* PR K: centered, all-caps, low-contrast section label —
+          matches the operations-console pattern (label, not headline). */}
+      <h2 className="cpr-section-header text-center mb-3 mt-2">
         {title}
       </h2>
       {childCount === 0 ? (
-        <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 p-4 text-sm text-gray-600">
+        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 p-4 text-sm text-gray-600">
           {empty}
         </div>
       ) : (
-        <ul className="space-y-2">{children}</ul>
+        <ul className="space-y-3">{children}</ul>
       )}
     </div>
   );

@@ -56,15 +56,15 @@ export default async function VolunteerHome({
           PR I (2026-05-24): reframed header. "You were paged" beats
           "Awaiting your action" because half these cards are claimed by
           someone else — the volunteer's role is to back the lead up,
-          not bail when they see another name. */}
+          not bail when they see another name.
+          PR K (2026-05-31): centered section label + bumped spacing to
+          match the operations-console treatment. */}
       {assignments.length > 0 && (
         <div>
-          <div className="flex items-baseline justify-between gap-2 mb-2 px-1">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-              You were paged ({assignments.length})
-            </h2>
-          </div>
-          <p className="text-[11px] text-gray-500 px-1 mb-2 italic">
+          <h2 className="cpr-section-header text-center mb-2 mt-2">
+            Current Rescue Jobs ({assignments.length})
+          </h2>
+          <p className="text-[11px] text-gray-500 text-center mb-3 italic">
             Tap any card to see details. Someone else claiming a case doesn't mean you're off the hook — if they drop, you're next.
           </p>
           <div className="space-y-3">
@@ -117,6 +117,9 @@ export default async function VolunteerHome({
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  // PR K: keep these top-level activity cards quietly rounded; section
+  // headers throughout the portal use the cpr-section-header treatment
+  // but per-card titles stay readable as headlines.
   return (
     <div className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-5">
       <h2 className="text-base font-semibold text-gray-900 mb-2">{title}</h2>
@@ -161,7 +164,7 @@ function MessageBanner({ msg }: { msg: string }) {
   const ok = !text.startsWith('⚠');
   const tone = ok ? 'bg-emerald-50 ring-emerald-200 text-emerald-900' : 'bg-amber-50 ring-amber-200 text-amber-900';
   return (
-    <div className={`rounded-xl ring-1 px-3 py-2 text-sm ${tone}`}>
+    <div className={`rounded-2xl ring-1 px-3 py-2 text-sm ${tone}`}>
       {text}
     </div>
   );

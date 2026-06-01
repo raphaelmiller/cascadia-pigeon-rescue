@@ -75,7 +75,7 @@ export default async function ApprovalQueuePage({
         </div>
       )}
       {sp.msg === 'review_rejected' && (
-        <div className="rounded-xl ring-1 bg-gray-100 ring-gray-300 text-gray-800 px-3 py-2 text-sm">
+        <div className="rounded-2xl ring-1 bg-gray-100 ring-gray-300 text-gray-800 px-3 py-2 text-sm">
           🚫 Rejected.
         </div>
       )}
@@ -87,7 +87,7 @@ export default async function ApprovalQueuePage({
       ) : (
         <ul className="space-y-2">
           {pending.map(e => (
-            <li key={e.id} className="rounded-xl bg-white shadow-sm ring-1 ring-violet-200 p-3 flex items-start gap-3">
+            <li key={e.id} className="rounded-2xl bg-white shadow-sm ring-1 ring-violet-200 p-3 flex items-start gap-3">
               <div className="flex-grow min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-900">{e.profile.name}</span>
@@ -112,13 +112,13 @@ export default async function ApprovalQueuePage({
               <div className="flex-shrink-0 flex flex-col gap-1">
                 <form action={approvePendingAction}>
                   <input type="hidden" name="eventId" value={e.id} />
-                  <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1">
+                  <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1">
                     Approve
                   </button>
                 </form>
                 <form action={rejectPendingAction}>
                   <input type="hidden" name="eventId" value={e.id} />
-                  <button type="submit" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1 ring-1 ring-gray-300">
+                  <button type="submit" className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1 ring-1 ring-gray-300">
                     Reject
                   </button>
                 </form>

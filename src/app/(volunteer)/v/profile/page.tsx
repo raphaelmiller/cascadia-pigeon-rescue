@@ -110,7 +110,7 @@ export default async function ProfilePage({
         </label>
 
         {transport && (
-          <fieldset className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+          <fieldset className="rounded-full border border-blue-200 bg-blue-50/40 p-3 space-y-3">
             <legend className="text-xs font-semibold uppercase tracking-wide text-blue-800 px-1">🚚 Transport details</legend>
             <label className="block">
               <span className={labelC}>Vehicle type</span>
@@ -147,7 +147,7 @@ export default async function ProfilePage({
         )}
 
         {rescue && (
-          <fieldset className="rounded-lg border border-red-200 bg-red-50/40 p-3 space-y-3">
+          <fieldset className="rounded-full border border-red-200 bg-red-50/40 p-3 space-y-3">
             <legend className="text-xs font-semibold uppercase tracking-wide text-red-800 px-1">🚨 Rescue details</legend>
             <label className="block">
               <span className={labelC}>Skills</span>
@@ -183,7 +183,7 @@ export default async function ProfilePage({
         )}
 
         {foster && (
-          <fieldset className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-1 text-sm text-gray-700">
+          <fieldset className="rounded-full border border-emerald-200 bg-emerald-50/40 p-3 space-y-1 text-sm text-gray-700">
             <legend className="text-xs font-semibold uppercase tracking-wide text-emerald-800 px-1">🐦 Foster details</legend>
             <p className="text-xs text-gray-700">
               Capacity ({foster.capacity}), rehab proficiency ({foster.medicalSkill}),
@@ -193,7 +193,7 @@ export default async function ProfilePage({
         )}
 
         <div>
-          <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm px-4 py-2">
+          <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm px-4 py-2">
             Save
           </button>
         </div>
@@ -216,7 +216,7 @@ export default async function ProfilePage({
             required
           />
         </label>
-        <button type="submit" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm px-4 py-2 ring-1 ring-gray-300">
+        <button type="submit" className="rounded-full bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm px-4 py-2 ring-1 ring-gray-300">
           Request email change
         </button>
       </form>

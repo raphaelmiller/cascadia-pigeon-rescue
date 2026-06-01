@@ -23,7 +23,7 @@ export default async function MagicLinkSentPage() {
           its way. It expires in 30 minutes.
         </p>
         {isStub && (
-          <div className="mt-4 rounded-lg bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-[11px] text-yellow-900 text-left">
+          <div className="mt-4 rounded-full bg-yellow-50 ring-1 ring-yellow-200 px-3 py-2 text-[11px] text-yellow-900 text-left">
             <strong>Dev note:</strong> email delivery is in stub mode. The
             magic-link URL is logged to the server console and to{' '}
             <code className="mx-1 px-1 rounded bg-yellow-100">uploads/_outbox/email.log</code>.
