@@ -26,9 +26,10 @@ import {
 } from '@/app/(volunteer)/v/actions';
 import type { OpenAssignment } from '@/lib/volunteer/assignments-query';
 import {
-  Siren, Truck, AlertTriangle, Check, FileText, ChevronRight,
+  Siren, Truck, AlertTriangle, Check, ChevronRight,
   UserPlus, Heart, Users,
 } from 'lucide-react';
+import { StatusRailCard, type StatusRailTone } from './StatusRailCard';
 
 function fmtDeadline(d: Date | null): string {
   if (!d) return '';
@@ -51,33 +52,35 @@ function fmtRel(ms: number): string {
   return `${Math.round(hr / 24)}d ago`;
 }
 
-function urgencyTone(a: OpenAssignment): 'red' | 'orange' | 'yellow' | 'green' | 'gray' {
-  if (a.emergencyFlag) return 'red';
+// PR K (2026-05-31): tone vocabulary remapped to the new StatusRailCard
+// vocabulary. Old palette (red/orange/yellow/green/gray) collapsed into the
+// product-domain tones (emergency / rescue / assigned / warning). The
+// AssignmentCard now drives a left-rail visual + soft tinted body via the
+// StatusRailCard primitive.
+function urgencyTone(a: OpenAssignment): StatusRailTone {
+  if (a.emergencyFlag) return 'emergency';
   if (a.deadline) {
     const ms = a.deadline.getTime() - Date.now();
-    if (ms < 30 * 60 * 1000) return 'red';
-    if (ms < 2 * 60 * 60 * 1000) return 'orange';
-    if (ms < 24 * 60 * 60 * 1000) return 'yellow';
+    if (ms < 30 * 60 * 1000) return 'emergency';
+    if (ms < 2 * 60 * 60 * 1000) return 'warning';
   }
-  if (a.pointPersonIsMe) return 'green';
-  return 'gray';
+  if (a.pointPersonIsMe) return 'assigned';
+  return 'rescue';
 }
 
-const TONE_RING: Record<string, string> = {
-  red: 'ring-red-300 bg-red-50/40',
-  orange: 'ring-orange-300 bg-orange-50/40',
-  yellow: 'ring-yellow-300 bg-yellow-50/30',
-  green: 'ring-emerald-300 bg-emerald-50/30',
-  gray: 'ring-gray-200 bg-white',
+// Icon chip color: matches the rail tone semantics. Kept as a Tailwind
+// class so the lucide icon still pops against the soft body tint.
+const ICON_CHIP: Record<StatusRailTone, string> = {
+  emergency: 'bg-red-600 text-white',
+  warning:   'bg-amber-500 text-white',
+  assigned:  'bg-emerald-600 text-white',
+  rescue:    'bg-gray-200 text-gray-700',
+  info:      'bg-blue-600 text-white',
 };
 
-const TONE_BADGE: Record<string, string> = {
-  red: 'bg-red-600 text-white',
-  orange: 'bg-orange-500 text-white',
-  yellow: 'bg-yellow-400 text-yellow-900',
-  green: 'bg-emerald-600 text-white',
-  gray: 'bg-gray-200 text-gray-700',
-};
+// Note: PR K removed the inline RESCUE/EMERGENCY pill from the card header
+// because the left rail now carries that signal. If we need an inline
+// status badge again, the tone-to-class mapping lives in StatusRailCard.tsx.
 
 const RESOLVE_TONE: Record<string, string> = {
   emerald: 'bg-emerald-600 hover:bg-emerald-700 text-white',
@@ -103,7 +106,7 @@ function ResolveButton({
       <input type="hidden" name="jobType" value={jobType} />
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="resolution" value={resolution} />
-      <button type="submit" className={`${fullWidth ? 'w-full' : ''} rounded-lg text-xs font-semibold px-3 py-2 ${RESOLVE_TONE[tone]}`}>
+      <button type="submit" className={`${fullWidth ? 'w-full' : ''} rounded-full text-xs font-semibold px-4 py-2 ${RESOLVE_TONE[tone]}`}>
         {label}
       </button>
     </form>
@@ -116,6 +119,17 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
   const claimedByOther = !!a.pointPersonId && !a.pointPersonIsMe;
   const detailHref = a.jobType === 'RescueCase' ? `/rescue/case/${a.jobId}` : `/transport`;
 
+  // Rail label override: transport rows say TRANSPORT instead of RESCUE,
+  // and rescue rows the volunteer owns say RESCUE ASSIGNED.
+  const railLabel = (() => {
+    if (tone === 'emergency') return 'EMERGENCY';
+    if (tone === 'assigned') {
+      return a.jobType === 'RescueCase' ? 'RESCUE\u00a0ASSIGNED' : 'TRANSPORT\u00a0ASSIGNED';
+    }
+    if (tone === 'warning') return 'TIME\u00a0SENSITIVE';
+    return a.jobType === 'RescueCase' ? 'RESCUE' : 'TRANSPORT';
+  })();
+
   // Build the status line that explains who's leading + how recently.
   const claimedAgo = a.pointPersonClaimedAt ? fmtRel(Date.now() - a.pointPersonClaimedAt.getTime()) : null;
   const idleLine = a.idleMs !== null
@@ -124,18 +138,18 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
     : null;
 
   return (
-    <div className={`rounded-2xl shadow ring-1 p-4 ${TONE_RING[tone]}`}>
+    <StatusRailCard tone={tone} label={railLabel}>
       <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full ${TONE_BADGE[tone]}`}>
+        <div className={`flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full ${ICON_CHIP[tone]}`}>
           {a.emergencyFlag ? <AlertTriangle size={18} /> : <Icon size={18} />}
         </div>
         <div className="flex-grow min-w-0">
           {/* Tappable header → case page */}
           <Link href={detailHref} className="block group">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 ${TONE_BADGE[tone]}`}>
-                {a.emergencyFlag ? 'EMERGENCY' : a.jobType === 'RescueCase' ? 'Rescue' : 'Transport'}
-              </span>
+              {/* The rail handles primary status; this inline pill carries
+                  ESCALATED tier or deadline metadata only. We drop the
+                  redundant RESCUE/EMERGENCY pill that used to sit here. */}
               {a.currentTier && a.currentTier > 1 && (
                 <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 text-amber-900 ring-1 ring-amber-200">
                   Escalated · Tier {a.currentTier}
@@ -184,7 +198,8 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* Action buttons — PR K: pill-radius (rounded-full) to match the
+              soft operations-console language. */}
           <div className="mt-3 flex gap-2 flex-wrap">
             {/* No PP claimed yet → primary claim CTA */}
             {!a.pointPersonId && (
@@ -193,7 +208,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                 <input type="hidden" name="jobId" value={a.jobId} />
                 <button
                   type="submit"
-                  className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5"
+                  className="rounded-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold px-4 py-1.5"
                 >
                   Claim Point Person
                 </button>
@@ -214,7 +229,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                         the reason form is mandatory. */}
                     <Link
                       href={`/rescue/case/${a.jobId}#unable`}
-                      className="flex-1 inline-flex items-center justify-center rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2"
+                      className="flex-1 inline-flex items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2"
                       title="Couldn't rescue — escalate to next volunteer"
                     >
                       Unable (Escalate)
@@ -232,7 +247,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                       <input type="hidden" name="jobId" value={a.jobId} />
                       <button
                         type="submit"
-                        className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
+                        className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-4 py-1.5 ring-1 ring-gray-300"
                         // Christina feedback 2026-05-25: "how are we defining 'figured out'?"
                         // Tooltip is the first line of defense for new volunteers; the full
                         // explanation lives on the case detail page.
@@ -266,7 +281,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                   <input type="hidden" name="standby" value={a.iAmOnStandby ? '0' : '1'} />
                   <button
                     type="submit"
-                    className={`inline-flex items-center gap-1 rounded-lg text-xs font-semibold px-3 py-1.5 ${
+                    className={`inline-flex items-center gap-1 rounded-full text-xs font-semibold px-4 py-1.5 ${
                       a.iAmOnStandby
                         ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-900 ring-1 ring-emerald-300'
                         : 'bg-white hover:bg-gray-50 text-gray-700 ring-1 ring-gray-300'
@@ -283,7 +298,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                     <input type="hidden" name="jobId" value={a.jobId} />
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+                      className="inline-flex items-center gap-1 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold px-4 py-1.5"
                       title={`${a.pointPersonName ?? 'Lead'} has been silent — take over as Point Person`}
                     >
                       <UserPlus size={12} /> Take over
@@ -293,7 +308,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
 
                 <Link
                   href={detailHref}
-                  className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
+                  className="inline-flex items-center gap-1 rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-4 py-1.5 ring-1 ring-gray-300"
                 >
                   Open case <ChevronRight size={12} />
                 </Link>
@@ -308,7 +323,7 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
                 <input type="hidden" name="jobId" value={a.jobId} />
                 <button
                   type="submit"
-                  className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300"
+                  className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-4 py-1.5 ring-1 ring-gray-300"
                 >
                   Unavailable
                 </button>
@@ -317,6 +332,6 @@ export function AssignmentCard({ a }: { a: OpenAssignment }) {
           </div>
         </div>
       </div>
-    </div>
+    </StatusRailCard>
   );
 }
