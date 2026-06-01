@@ -141,17 +141,17 @@ export default async function ServiceRecordPage() {
 
       {/* Recent history */}
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+        <h2 className="cpr-section-header mb-2 px-1">
           Recent activity
         </h2>
         {r.recentEvents.length === 0 ? (
-          <div className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 p-4 text-sm text-gray-600">
+          <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 p-4 text-sm text-gray-600">
             Nothing here yet.
           </div>
         ) : (
           <ul className="space-y-2">
             {r.recentEvents.map(e => (
-              <li key={e.id} className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 p-3 flex items-start gap-3">
+              <li key={e.id} className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 p-3 flex items-start gap-3">
                 <div className="flex-grow min-w-0">
                   <p className="text-sm text-gray-900">
                     <span className="font-mono text-xs text-gray-500">{e.kind}</span>

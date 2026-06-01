@@ -108,7 +108,7 @@ export default async function VolunteerBirdsPage({
         {birds.length > 0 && (
           <label className="block">
             <span className="block text-xs font-semibold uppercase tracking-wide text-gray-700 mb-1">For a specific bird (optional)</span>
-            <select name="birdId" defaultValue="" className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+            <select name="birdId" defaultValue="" className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm">
               <option value="">— General check-in (any bird) —</option>
               {birds.map(b => (
                 <option key={b.id} value={b.id}>{b.name} {b.species ? `· ${b.species}` : ''}</option>
@@ -123,18 +123,18 @@ export default async function VolunteerBirdsPage({
             name="note"
             rows={2}
             placeholder="Anything to share? Leave blank if all's well."
-            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
           />
         </label>
 
-        <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
+        <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
           Check in (+1 pt)
         </button>
       </form>
 
       {/* Birds in care */}
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+        <h2 className="cpr-section-header mb-2 px-1">
           Birds in your care ({birds.length})
         </h2>
         {birds.length === 0 ? (
@@ -144,7 +144,7 @@ export default async function VolunteerBirdsPage({
         ) : (
           <ul className="space-y-2">
             {birds.map(b => (
-              <li key={b.id} className="rounded-xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-center gap-3">
+              <li key={b.id} className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-center gap-3">
                 <Bird size={18} className="text-gray-500" />
                 <div className="flex-grow min-w-0">
                   <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
@@ -162,12 +162,12 @@ export default async function VolunteerBirdsPage({
       {/* Recent check-ins */}
       {recentCheckIns.length > 0 && (
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+          <h2 className="cpr-section-header mb-2 px-1">
             Your recent check-ins
           </h2>
           <ul className="space-y-2">
             {recentCheckIns.map(c => (
-              <li key={c.id} className="rounded-xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-start gap-3">
+              <li key={c.id} className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-start gap-3">
                 <div className={`flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full ${PULSE_TONE[c.pulse].bg}`}>
                   {(() => { const I = PULSE_TONE[c.pulse].icon; return <I size={14} />; })()}
                 </div>

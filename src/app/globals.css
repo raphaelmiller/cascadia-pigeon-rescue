@@ -1,12 +1,57 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens (PR K, 2026-05-31)
+ *
+ * Visual language: soft "operations console" — warm neutral background,
+ * white cards, status communicated through a vertical color rail on the
+ * left of each card plus a softly tinted card body. Buttons are pill-shaped.
+ *
+ * Color philosophy:
+ *   - Background tints are deliberately MUTED (red and green sit close in
+ *     softness so neither dominates a scanning operator's eye).
+ *   - Rails are saturated to anchor scanning, but never harsh.
+ *   - Brand teal is the primary CTA; orange is reserved for ownership-shift
+ *     actions ("Take over") that we want to read as warm-but-decisive.
+ */
 :root {
+  /* Surfaces */
   --bg: #f7f7f5;
   --fg: #111;
   --muted: #6b7280;
   --card: #ffffff;
   --border: #e5e7eb;
-  --brand: #0f766e; /* teal-700 */
+
+  /* Brand + accents */
+  --brand: #0f766e;                /* teal-700 — primary CTA + nav */
+  --brand-hover: #115e59;          /* teal-800 */
+  --accent: #e68a1f;               /* orange-500-ish — secondary CTAs (Take over) */
+  --accent-hover: #d97a12;
+
+  /* Status rails (saturated; the left-edge anchor color) */
+  --status-emergency-rail: #d92e2e;
+  --status-rescue-rail:    #c8cdd0;
+  --status-assigned-rail:  #6ba77f;
+  --status-warning-rail:   #e8a317;
+  --status-info-rail:      #4a90e2;
+
+  /* Status card body tints (MUTED — red and green deliberately equalized) */
+  --status-emergency-bg:   #f9eded;   /* warm pale red */
+  --status-rescue-bg:      #ffffff;   /* neutral white */
+  --status-assigned-bg:    #edf3ee;   /* muted sage — matches red softness */
+  --status-warning-bg:     #fdf6e7;
+  --status-info-bg:        #eef4fb;
+
+  /* Status rail label text (the rotated word, e.g., "EMERGENCY") */
+  --status-emergency-label: #ffffff;
+  --status-rescue-label:    #6b7280;
+  --status-assigned-label:  #ffffff;
+  --status-warning-label:   #ffffff;
+  --status-info-label:      #ffffff;
+
+  /* Typography hooks for section conventions */
+  --section-header-fg: #6b7280;
+  --section-header-letter-spacing: 0.05em;
 }
 
 html, body {
@@ -24,4 +69,88 @@ button, a, input, textarea, select {
 /* Mobile-first: comfortable form inputs. */
 input, textarea, select {
   font-size: 16px;
+}
+
+/* ============================================================================
+ * StatusRailCard primitive
+ * Used by AssignmentCard + HistoryRow + dispatch cards. The card has a left
+ * rail with a rotated status word, and a tinted body. Cards remain rounded.
+ * ========================================================================== */
+
+.status-rail-card {
+  display: flex;
+  align-items: stretch;
+  border-radius: 1rem;            /* 16px — matches Tailwind rounded-2xl */
+  overflow: hidden;
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.04);
+  /* The outer card border is applied via the Tailwind `ring-1 ring-gray-200`
+     classes on the React element — see StatusRailCard.tsx. We don't apply
+     a CSS border here because the rail+body composition needs clean edges. */
+}
+
+.status-rail {
+  flex-shrink: 0;
+  width: 1.75rem;                 /* 28px wide rail */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.status-rail-label {
+  /* Rotated 90° counter-clockwise so the word reads bottom-to-top up the rail */
+  transform: rotate(-90deg);
+  transform-origin: center;
+  white-space: nowrap;
+  font-size: 0.625rem;            /* 10px */
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-rail--emergency {
+  background: var(--status-emergency-rail);
+}
+.status-rail--emergency .status-rail-label { color: var(--status-emergency-label); }
+
+.status-rail--rescue {
+  background: var(--status-rescue-rail);
+}
+.status-rail--rescue .status-rail-label { color: var(--status-rescue-label); }
+
+.status-rail--assigned {
+  background: var(--status-assigned-rail);
+}
+.status-rail--assigned .status-rail-label { color: var(--status-assigned-label); }
+
+.status-rail--warning {
+  background: var(--status-warning-rail);
+}
+.status-rail--warning .status-rail-label { color: var(--status-warning-label); }
+
+.status-rail--info {
+  background: var(--status-info-rail);
+}
+.status-rail--info .status-rail-label { color: var(--status-info-label); }
+
+.status-rail-card-body {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 1rem;
+  background: var(--card);        /* default; statuses override below */
+}
+
+.status-rail-card-body--emergency { background: var(--status-emergency-bg); }
+.status-rail-card-body--rescue    { background: var(--status-rescue-bg); }
+.status-rail-card-body--assigned  { background: var(--status-assigned-bg); }
+.status-rail-card-body--warning   { background: var(--status-warning-bg); }
+.status-rail-card-body--info      { background: var(--status-info-bg); }
+
+/* Section headers — small, all-caps, centered or near-centered, gray */
+.cpr-section-header {
+  font-size: 0.6875rem;           /* 11px */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--section-header-letter-spacing);
+  color: var(--section-header-fg);
 }

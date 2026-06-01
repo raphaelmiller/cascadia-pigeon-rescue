@@ -111,7 +111,7 @@ export default async function VolunteerRescueCasePage({
 
       {/* Status banner */}
       {sp.msg && (
-        <div className={`rounded-xl ring-1 px-3 py-2 text-sm ${
+        <div className={`rounded-2xl ring-1 px-3 py-2 text-sm ${
           sp.msg === 'note_added' || sp.msg === 'standby_on' || sp.msg === 'took_over' ? 'bg-emerald-50 ring-emerald-200 text-emerald-900' :
           sp.msg.startsWith('takeover_failed') ? 'bg-amber-50 ring-amber-200 text-amber-900' :
           sp.msg === 'unable_needs_reason' ? 'bg-amber-50 ring-amber-200 text-amber-900' :
@@ -211,7 +211,7 @@ export default async function VolunteerRescueCasePage({
               <form action={claimPointPersonAction}>
                 <input type="hidden" name="jobType" value="RescueCase" />
                 <input type="hidden" name="jobId" value={c.id} />
-                <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5">
+                <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5">
                   Claim Point Person
                 </button>
               </form>
@@ -239,7 +239,7 @@ export default async function VolunteerRescueCasePage({
                 <input type="hidden" name="jobId" value={c.id} />
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
                   title={`${c.pointPerson?.name ?? 'Lead'} has been silent — step in as Point Person`}
                 >
                   <UserPlus size={12} /> Take over
@@ -277,11 +277,11 @@ export default async function VolunteerRescueCasePage({
               <input
                 name="reason"
                 placeholder="Optional: what happened"
-                className="block w-full mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm"
+                className="block w-full mt-2 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-sm"
               />
               <button
                 type="submit"
-                className="mt-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+                className="mt-2 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
               >
                 Un-close + re-open
               </button>
@@ -310,7 +310,7 @@ export default async function VolunteerRescueCasePage({
               name="text"
               rows={3}
               placeholder="What's happening? e.g. 'Arrived on scene. Bird is under the dumpster, hopping not flying — likely wing injury. Owner of building was helpful.'"
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
             />
             <div className="flex flex-wrap items-center gap-3">
               <label className="inline-flex items-center gap-1 text-xs text-gray-700 cursor-pointer">
@@ -318,7 +318,7 @@ export default async function VolunteerRescueCasePage({
                 <span className="underline">Add photos</span>
                 <input type="file" name="photos" multiple accept="image/*" className="sr-only" />
               </label>
-              <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
+              <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
                 Post update
               </button>
               <span className="text-[11px] text-gray-500 ml-auto">+1 pt per note · +2 per photo · capped +5/case</span>
@@ -387,7 +387,7 @@ export default async function VolunteerRescueCasePage({
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3 py-1.5 ring-1 ring-gray-300"
+              className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-3 py-1.5 ring-1 ring-gray-300"
             >
               Mark as Handled <span className="text-[10px] text-gray-400 font-normal">(Figured Out)</span>
             </button>
@@ -414,7 +414,7 @@ export default async function VolunteerRescueCasePage({
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
+              className="rounded-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5"
             >
               Un-mark Handled (re-open dispatch)
             </button>
@@ -462,14 +462,14 @@ export default async function VolunteerRescueCasePage({
               minLength={4}
               rows={3}
               placeholder="e.g. 'Got there but bird had flown to the roof of the auto shop. Last seen heading east. Brought a net but couldn't reach.'"
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
             />
           </label>
           <p className="text-[11px] text-gray-600 italic">
             Coordinators will review this and may award points for high-effort attempts. You&apos;ll get
             +1 banked automatically for posting an honest hand-off; a bonus is judged on context.
           </p>
-          <button type="submit" className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
+          <button type="submit" className="rounded-full bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2">
             Send to coordinators + pass to next volunteer
           </button>
         </form>

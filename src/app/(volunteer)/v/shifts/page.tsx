@@ -124,15 +124,15 @@ export default async function VolunteerShiftsPage({
       {/* Three claim CTAs (deep-link to scope-preselected form) */}
       {!editing && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <a href="?scope=rescue#add" className="flex items-center gap-2 rounded-xl bg-white shadow ring-1 ring-red-200 hover:ring-red-300 p-3">
+          <a href="?scope=rescue#add" className="flex items-center gap-2 rounded-2xl bg-white shadow ring-1 ring-red-200 hover:ring-red-300 p-3">
             <Siren size={20} className="text-red-600" />
             <span className="text-sm font-semibold text-gray-900">Claim a rescue shift</span>
           </a>
-          <a href="?scope=transport#add" className="flex items-center gap-2 rounded-xl bg-white shadow ring-1 ring-blue-200 hover:ring-blue-300 p-3">
+          <a href="?scope=transport#add" className="flex items-center gap-2 rounded-2xl bg-white shadow ring-1 ring-blue-200 hover:ring-blue-300 p-3">
             <Truck size={20} className="text-blue-600" />
             <span className="text-sm font-semibold text-gray-900">Claim a transport shift</span>
           </a>
-          <a href="?scope=any#add" className="flex items-center gap-2 rounded-xl bg-white shadow ring-1 ring-teal-200 hover:ring-teal-300 p-3">
+          <a href="?scope=any#add" className="flex items-center gap-2 rounded-2xl bg-white shadow ring-1 ring-teal-200 hover:ring-teal-300 p-3">
             <Calendar size={20} className="text-teal-600" />
             <span className="text-sm font-semibold text-gray-900">Claim availability for both</span>
           </a>
@@ -158,7 +158,7 @@ export default async function VolunteerShiftsPage({
               return (
                 <label
                   key={s}
-                  className="flex flex-col items-center gap-1 rounded-xl ring-1 ring-gray-300 px-2 py-3 cursor-pointer hover:bg-gray-50 has-[:checked]:bg-teal-50 has-[:checked]:ring-teal-400 has-[:checked]:ring-2"
+                  className="flex flex-col items-center gap-1 rounded-2xl ring-1 ring-gray-300 px-2 py-3 cursor-pointer hover:bg-gray-50 has-[:checked]:bg-teal-50 has-[:checked]:ring-teal-400 has-[:checked]:ring-2"
                 >
                   <input
                     type="radio"
@@ -188,7 +188,7 @@ export default async function VolunteerShiftsPage({
                 name="startDate"
                 required
                 defaultValue={editing ? toLocalDate(editing.startsAt) : toLocalDate(defaultStart)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </label>
             <label className="block">
@@ -197,7 +197,7 @@ export default async function VolunteerShiftsPage({
                 type="date"
                 name="endDate"
                 defaultValue={editing ? toLocalDate(editing.endsAt) : toLocalDate(defaultStart)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </label>
           </div>
@@ -216,7 +216,7 @@ export default async function VolunteerShiftsPage({
                 name="startTime"
                 required
                 defaultValue={editing ? toLocalTime(editing.startsAt) : toLocalTime(defaultStart)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </label>
             <label className="block">
@@ -226,7 +226,7 @@ export default async function VolunteerShiftsPage({
                 name="endTime"
                 required
                 defaultValue={editing ? toLocalTime(editing.endsAt) : toLocalTime(defaultEnd)}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </label>
           </div>
@@ -236,7 +236,7 @@ export default async function VolunteerShiftsPage({
         </fieldset>
 
         {/* Recurring toggle */}
-        <fieldset className="rounded-lg ring-1 ring-gray-200 p-3 space-y-2">
+        <fieldset className="rounded-full ring-1 ring-gray-200 p-3 space-y-2">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -271,7 +271,7 @@ export default async function VolunteerShiftsPage({
                 type="date"
                 name="effectiveUntil"
                 defaultValue={editing?.effectiveUntil ? editing.effectiveUntil.toISOString().slice(0, 10) : ''}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
               />
             </label>
           </div>
@@ -284,12 +284,12 @@ export default async function VolunteerShiftsPage({
             defaultValue={editing?.notes ?? ''}
             rows={2}
             placeholder='e.g. "Can do long-distance transport on weekends"'
-            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+            className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm"
           />
         </label>
 
         {/* Advanced power-user RRULE — collapsed by default */}
-        <details className="rounded-lg ring-1 ring-gray-200">
+        <details className="rounded-full ring-1 ring-gray-200">
           <summary className="cursor-pointer text-xs font-medium text-gray-600 px-3 py-2 hover:bg-gray-50">
             Advanced — paste a custom recurrence rule (RRULE)
           </summary>
@@ -299,7 +299,7 @@ export default async function VolunteerShiftsPage({
               name="customRrule"
               defaultValue={editing?.rrule ?? ''}
               placeholder="FREQ=WEEKLY;BYDAY=MO,WE,FR"
-              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-mono"
+              className="block w-full rounded-full border border-gray-300 bg-white px-3 py-2 text-sm font-mono"
             />
             <p className="text-[11px] text-gray-500 mt-2">
               Overrides the recurring section above. Leave blank to use the form.
@@ -308,11 +308,11 @@ export default async function VolunteerShiftsPage({
         </details>
 
         <div className="flex gap-2">
-          <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
+          <button type="submit" className="rounded-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2">
             {editing ? 'Save changes' : 'Save availability'}
           </button>
           {editing && (
-            <a href="/shifts" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 ring-1 ring-gray-300">
+            <a href="/shifts" className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 ring-1 ring-gray-300">
               Cancel
             </a>
           )}
@@ -321,7 +321,7 @@ export default async function VolunteerShiftsPage({
 
       {/* List — active */}
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1">
+        <h2 className="cpr-section-header mb-2 px-1">
           Active availability ({active.length})
         </h2>
         {active.length === 0 ? (
@@ -340,7 +340,7 @@ export default async function VolunteerShiftsPage({
       {/* List — past */}
       {past.length > 0 && (
         <details>
-          <summary className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 px-1 cursor-pointer">
+          <summary className="cpr-section-header mb-2 px-1 cursor-pointer">
             Past blocks ({past.length})
           </summary>
           <ul className="space-y-2 mt-2">
@@ -366,7 +366,7 @@ function AvailabilityRow({ row: r }: { row: {
   const cfg = SCOPE_LABELS[r.scope] ?? SCOPE_LABELS.any;
   const Icon = cfg.icon;
   return (
-    <li className="rounded-xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-start gap-3">
+    <li className="rounded-2xl bg-white shadow ring-1 ring-gray-200 p-3 flex items-start gap-3">
       <div className={`flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full ${cfg.tone}`}>
         <Icon size={14} />
       </div>
@@ -380,12 +380,12 @@ function AvailabilityRow({ row: r }: { row: {
         {r.notes && <p className="text-xs text-gray-600 mt-1">{r.notes}</p>}
       </div>
       <div className="flex-shrink-0 flex gap-1">
-        <a href={`/shifts?edit=${r.id}#add`} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
+        <a href={`/shifts?edit=${r.id}#add`} className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800">
           <Edit3 size={16} />
         </a>
         <form action={deleteAvailability}>
           <input type="hidden" name="id" value={r.id} />
-          <button type="submit" className="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-700">
+          <button type="submit" className="rounded-full p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-700">
             <Trash2 size={16} />
           </button>
         </form>

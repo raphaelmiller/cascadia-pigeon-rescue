@@ -10,6 +10,30 @@ import {
 } from '@/app/(volunteer)/v/actions';
 import type { HistoryItem } from '@/lib/volunteer/assignment-history';
 import { AlertTriangle, Check, Clock, RotateCcw } from 'lucide-react';
+import { StatusRailCard, type StatusRailTone } from './StatusRailCard';
+
+// PR K (2026-05-31): tone the active row by status so it picks up a left
+// rail. Recent rows are quieter (no rail) so the page reads as
+// "current ops at top, historical record below".
+function activeRowTone(item: HistoryItem): StatusRailTone {
+  if (item.emergencyFlag) return 'emergency';
+  if (item.pointPersonIsMe) return 'assigned';
+  if (item.deadline) {
+    const ms = item.deadline.getTime() - Date.now();
+    if (ms < 30 * 60 * 1000) return 'emergency';
+    if (ms < 2 * 60 * 60 * 1000) return 'warning';
+  }
+  return 'rescue';
+}
+
+function activeRowLabel(item: HistoryItem, tone: StatusRailTone): string {
+  if (tone === 'emergency') return 'EMERGENCY';
+  if (tone === 'assigned') {
+    return item.jobType === 'RescueCase' ? 'RESCUE\u00a0ASSIGNED' : 'TRANSPORT\u00a0ASSIGNED';
+  }
+  if (tone === 'warning') return 'TIME\u00a0SENSITIVE';
+  return item.jobType === 'RescueCase' ? 'RESCUE' : 'TRANSPORT';
+}
 
 function fmtDeadline(d: Date | null): string {
   if (!d) return '';
@@ -55,8 +79,37 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
     !item.pointPersonId || item.pointPersonIsMe
   );
 
+  // Active rows get the status rail + tinted body. Recent rows stay quiet.
+  if (kind === 'active') {
+    const tone = activeRowTone(item);
+    const label = activeRowLabel(item, tone);
+    return (
+      <li>
+        <StatusRailCard tone={tone} label={label} className="space-y-2">
+          <HistoryRowContent item={item} kind={kind} showActionBar={showActionBar} />
+        </StatusRailCard>
+      </li>
+    );
+  }
+
   return (
-    <li className="rounded-xl bg-white shadow-sm ring-1 ring-gray-200 p-3 space-y-2">
+    <li className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200 p-3 space-y-2">
+      <HistoryRowContent item={item} kind={kind} showActionBar={showActionBar} />
+    </li>
+  );
+}
+
+// Extracted body so both the rail-wrapped (active) and quieter (recent)
+// variants share one render path. Keeps any future content edits in one place.
+function HistoryRowContent({
+  item, kind, showActionBar,
+}: {
+  item: HistoryItem;
+  kind: 'active' | 'recent';
+  showActionBar: boolean;
+}) {
+  return (
+    <>
       <div className="flex items-start gap-3">
         <div className="flex-grow min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -112,7 +165,7 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
                   <input type="hidden" name="jobId" value={item.jobId} />
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1 rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-[11px] font-medium px-2 py-0.5 ring-1 ring-gray-300"
+                    className="inline-flex items-center gap-1 rounded-full bg-white hover:bg-gray-50 text-gray-700 text-[11px] font-medium px-3 py-0.5 ring-1 ring-gray-300"
                     title="Pressed Unavailable by accident? Tap to re-join the pool for this job."
                   >
                     <RotateCcw size={10} /> Un-decline
@@ -136,14 +189,14 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
               <form action={claimPointPersonAction}>
                 <input type="hidden" name="jobType" value={item.jobType} />
                 <input type="hidden" name="jobId" value={item.jobId} />
-                <button type="submit" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-3 py-1.5">
+                <button type="submit" className="rounded-full bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold px-4 py-1.5">
                   Claim Point Person
                 </button>
               </form>
               <form action={declineAction}>
                 <input type="hidden" name="jobType" value={item.jobType} />
                 <input type="hidden" name="jobId" value={item.jobId} />
-                <button type="submit" className="rounded-lg bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-3 py-1.5 ring-1 ring-gray-300">
+                <button type="submit" className="rounded-full bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium px-4 py-1.5 ring-1 ring-gray-300">
                   Unavailable
                 </button>
               </form>
@@ -155,7 +208,7 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
               <input type="hidden" name="jobId" value={item.jobId} />
               <button
                 type="submit"
-                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5"
+                className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-1.5"
                 title="Mark as Handled — use when the situation was sorted outside the app. Stops the fan-out without resolving the case."
               >
                 Mark as Handled <span className="ml-1 text-[10px] opacity-80 font-normal">(Figured Out)</span>
@@ -164,6 +217,6 @@ export function HistoryRow({ item, kind }: { item: HistoryItem; kind: 'active' |
           )}
         </div>
       )}
-    </li>
+    </>
   );
 }

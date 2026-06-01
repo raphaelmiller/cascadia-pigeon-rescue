@@ -63,7 +63,7 @@ export default async function MagicLinkCallbackPage({
         <p className="text-sm text-gray-600 mb-4">Signing you in…</p>
         <button
           type="submit"
-          className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5"
+          className="rounded-full bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5"
           autoFocus
         >
           Continue

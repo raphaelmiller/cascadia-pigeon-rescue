@@ -18,7 +18,7 @@ export default function VolunteerNotFound() {
         </p>
         <Link
           href="/"
-          className="inline-block rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5 transition"
+          className="inline-block rounded-full bg-teal-600 hover:bg-teal-700 text-white font-medium text-sm px-4 py-2.5 transition"
         >
           Back to your home
         </Link>

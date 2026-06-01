@@ -64,7 +64,7 @@ export function VolunteerNav({
       <header className="sticky top-0 z-30 hidden md:block bg-white/80 backdrop-blur border-b border-gray-200">
         <div className="mx-auto max-w-3xl px-6 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-white">🕊️</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--brand)] text-white">🕊️</span>
             <span>CPR Volunteer</span>
           </Link>
           <nav className="flex items-center gap-1">
@@ -75,7 +75,7 @@ export function VolunteerNav({
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
                     active
                       ? 'bg-teal-50 text-teal-800 ring-1 ring-teal-200'
                       : 'text-gray-700 hover:bg-gray-100'
@@ -89,7 +89,7 @@ export function VolunteerNav({
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-800"
                 title="Sign out"
               >
                 <LogOut size={14} />
@@ -103,7 +103,7 @@ export function VolunteerNav({
       <header className="sticky top-0 z-30 md:hidden bg-white/90 backdrop-blur border-b border-gray-200">
         <div className="px-4 h-12 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white">🕊️</span>
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--brand)] text-white">🕊️</span>
             <span className="text-sm">CPR Volunteer</span>
           </Link>
           <form action={logoutAction}>
