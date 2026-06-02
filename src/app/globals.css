@@ -35,10 +35,17 @@
   --status-warning-rail:   #e8a317;
   --status-info-rail:      #4a90e2;
 
-  /* Status card body tints (MUTED — red and green deliberately equalized) */
-  --status-emergency-bg:   #f9eded;   /* warm pale red */
-  --status-rescue-bg:      #ffffff;   /* neutral white */
-  --status-assigned-bg:    #edf3ee;   /* muted sage — matches red softness */
+  /* Status card body tints (MUTED — red and green deliberately equalized)
+   *
+   * PR L (2026-06-01): pulled assigned bg further toward neutral so it sits
+   * at the same saturation as the emergency tint. Rafa: "green should be a
+   * lot more muted, like the red one." Old was #edf3ee (still readably mint);
+   * new #e8eee9 is barely-there sage — visible only as a soft warmth, not as
+   * a colored card. Also slightly warmed the rescue bg from pure white to a
+   * very-pale cream so it reads as a card surface, not as page background. */
+  --status-emergency-bg:   #f9eded;   /* warm pale red — the muting benchmark */
+  --status-rescue-bg:      #fbfaf7;   /* very pale cream — reads as card, not page */
+  --status-assigned-bg:    #e8eee9;   /* barely-there sage — matches red saturation */
   --status-warning-bg:     #fdf6e7;
   --status-info-bg:        #eef4fb;
 
@@ -146,11 +153,27 @@ input, textarea, select {
 .status-rail-card-body--warning   { background: var(--status-warning-bg); }
 .status-rail-card-body--info      { background: var(--status-info-bg); }
 
-/* Section headers — small, all-caps, centered or near-centered, gray */
+/* Section headers — small, all-caps, centered or near-centered, gray
+ *
+ * PR L (2026-06-01): bumped from 11px/0.05em → 12px/0.12em weight 700 to match
+ * the reference "CURRENT RESCUE JOBS" header treatment. Reads as an authoritative
+ * structural divider rather than another line of body copy. */
 .cpr-section-header {
-  font-size: 0.6875rem;           /* 11px */
+  font-size: 0.75rem;             /* 12px */
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--section-header-fg);
+}
+
+/* Section subtitle — the small structural caption underneath the header.
+ * Examples: "Click on a job for more info", "Tap to expand".
+ * Short, all-caps, gray, no italics. Replaces the chatty sentence-case copy
+ * we used in PR K. */
+.cpr-section-subtitle {
+  font-size: 0.625rem;            /* 10px */
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: var(--section-header-letter-spacing);
-  color: var(--section-header-fg);
+  letter-spacing: 0.1em;
+  color: #9ca3af;                 /* gray-400 — quieter than the header */
 }

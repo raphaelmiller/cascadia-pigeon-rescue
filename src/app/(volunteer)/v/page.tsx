@@ -58,14 +58,18 @@ export default async function VolunteerHome({
           someone else — the volunteer's role is to back the lead up,
           not bail when they see another name.
           PR K (2026-05-31): centered section label + bumped spacing to
-          match the operations-console treatment. */}
+          match the operations-console treatment.
+          PR L (2026-06-01): subtitle copy tightened to the structural
+          all-caps caption pattern from the reference. The chatty
+          "if they drop, you're next" copy lives on the case detail page
+          now — it doesn't belong above a list. */}
       {assignments.length > 0 && (
         <div>
-          <h2 className="cpr-section-header text-center mb-2 mt-2">
+          <h2 className="cpr-section-header text-center mb-1.5 mt-2">
             Current Rescue Jobs ({assignments.length})
           </h2>
-          <p className="text-[11px] text-gray-500 text-center mb-3 italic">
-            Tap any card to see details. Someone else claiming a case doesn't mean you're off the hook — if they drop, you're next.
+          <p className="cpr-section-subtitle text-center mb-3">
+            Click on a job for more info
           </p>
           <div className="space-y-3">
             {assignments.map(a => (
