@@ -77,6 +77,20 @@ function isVolunteerHost(host: string): boolean {
 
 type AuthedReq = NextRequest & { auth: Session | null };
 
+/**
+ * PR L follow-up (2026-06-01): when dev-bypass is on AND the operator hits
+ * an explicit /v/* path on the admin host, treat the request as a volunteer
+ * host request. This is the QA shortcut: production volunteer host isn't
+ * provisioned (would need a custom domain or sibling Fly app), but operators
+ * still need to inspect the volunteer surface across personas. This branch
+ * only activates when BOTH DEV_BYPASS_AUTH=1 and DEV_BYPASS_FORCE=1 are set,
+ * which is the same triple-lock that gates the credentials provider itself.
+ * Removing the secrets disables both at once.
+ */
+function isDevBypassActive(): boolean {
+  return process.env.DEV_BYPASS_AUTH === '1' && process.env.DEV_BYPASS_FORCE === '1';
+}
+
 export default auth((req) => {
   const r = req as AuthedReq;
   const url = r.nextUrl;
@@ -87,6 +101,29 @@ export default auth((req) => {
 
   // Pass-through for static + next-auth.
   if (isStatic(pathname)) return NextResponse.next();
+
+  // Dev-bypass admin-host shortcut: when bypass is on and someone hits
+  // /v/* on the admin host, treat as if the request came in on the
+  // volunteer host. The path already has the /v prefix the route group
+  // expects, so we just pass it straight through to NextResponse.next()
+  // — no rewrite needed because /v/* IS the internal path.
+  if (!isVolunteer && isDevBypassActive() && (pathname === '/v' || pathname.startsWith('/v/'))) {
+    // Public paths on the volunteer surface (login, auth callback) need
+    // to skip the admin-side auth gate below. Map the "user-facing" path
+    // (strip /v) and check against PUBLIC_VOLUNTEER_PATHS.
+    const userFacing = pathname === '/v' ? '/' : pathname.slice(2);
+    if (
+      PUBLIC_VOLUNTEER_PATHS.has(userFacing) ||
+      userFacing.startsWith('/auth/') ||
+      role === 'volunteer'
+    ) {
+      return NextResponse.next();
+    }
+    // Not signed in as volunteer and path isn't public → send to /v/login.
+    const loginUrl = new URL('/v/login', r.url);
+    loginUrl.searchParams.set('next', pathname + search);
+    return NextResponse.redirect(loginUrl);
+  }
 
   if (isVolunteer) {
     // ---- VOLUNTEER HOST ----
